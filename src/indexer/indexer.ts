@@ -38,10 +38,7 @@ export class Indexer {
     }
     this.progress.onChunkComplete(allChunks.length, files.length);
 
-    // 2. Удаляем старые чанки этого источника.
-    await this.chunkStorage.deleteBySource(source.id);
-
-    // 3. Генерируем эмбеддинги батчами.
+    // 2. Генерируем эмбеддинги батчами (до удаления старых, чтобы не потерять данные при ошибке API).
     const embeddings: number[][] = [];
     for (let i = 0; i < allChunks.length; i += EMBED_BATCH_SIZE) {
       const batch = allChunks.slice(i, i + EMBED_BATCH_SIZE);
@@ -54,7 +51,10 @@ export class Indexer {
       );
     }
 
-    // 4. Сохраняем чанки с эмбеддингами в БД.
+    // 3. Удаляем старые чанки и сохраняем новые.
+    // Удаление после успешной генерации эмбеддингов — защита от потери данных при ошибке API.
+    await this.chunkStorage.deleteBySource(source.id);
+
     const chunksWithEmbeddings = allChunks.map((chunk, i) => ({
       sourceId: chunk.sourceId,
       content: chunk.content,

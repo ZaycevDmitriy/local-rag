@@ -14,7 +14,7 @@ const BATCH_SIZE = 100;
 export class ChunkStorage {
   constructor(private sql: postgres.Sql) {}
 
-  // Вставляет чанки пачками по BATCH_SIZE.
+  // Вставляет чанки пачками по BATCH_SIZE в транзакции.
   async insertBatch(chunks: Array<{
     sourceId: string;
     content: string;
@@ -24,21 +24,28 @@ export class ChunkStorage {
   }>): Promise<void> {
     for (let i = 0; i < chunks.length; i += BATCH_SIZE) {
       const batch = chunks.slice(i, i + BATCH_SIZE);
-      // Вставляем пачку через VALUES. Каждую строку вставляем отдельным запросом
-      // внутри пачки, чтобы корректно использовать sql.json() для JSONB.
-      for (const chunk of batch) {
-        const vectorStr = pgvector.toSql(chunk.embedding) as string;
 
-        await this.sql`
-          INSERT INTO chunks (source_id, content, content_hash, metadata, embedding)
-          VALUES (
-            ${chunk.sourceId},
-            ${chunk.content},
-            ${chunk.contentHash},
-            ${this.sql.json(chunk.metadata as unknown as JsonSafe)},
-            ${vectorStr}::vector
-          )
-        `;
+      // Вставляем пачку в одной транзакции для снижения round-trip overhead.
+      await this.sql`BEGIN`;
+      try {
+        for (const chunk of batch) {
+          const vectorStr = pgvector.toSql(chunk.embedding) as string;
+
+          await this.sql`
+            INSERT INTO chunks (source_id, content, content_hash, metadata, embedding)
+            VALUES (
+              ${chunk.sourceId},
+              ${chunk.content},
+              ${chunk.contentHash},
+              ${this.sql.json(chunk.metadata as unknown as JsonSafe)},
+              ${vectorStr}::vector
+            )
+          `;
+        }
+        await this.sql`COMMIT`;
+      } catch (error) {
+        await this.sql`ROLLBACK`;
+        throw error;
       }
     }
   }
@@ -95,7 +102,7 @@ export class ChunkStorage {
     limit: number,
     sourceId?: string,
   ): Promise<Array<{ id: string; score: number }>> {
-    const vectorStr = `[${embedding.join(',')}]`;
+    const vectorStr = pgvector.toSql(embedding) as string;
 
     if (sourceId) {
       return await this.sql<Array<{ id: string; score: number }>>`

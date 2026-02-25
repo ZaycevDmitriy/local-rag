@@ -29,7 +29,6 @@ const BINARY_EXTENSIONS = new Set([
   '.woff', '.woff2', '.ttf', '.eot',
   '.mp3', '.mp4',
   '.zip', '.tar', '.gz',
-  '.pdf',
   '.exe', '.dll', '.so', '.dylib',
 ]);
 
