@@ -29,6 +29,7 @@ async function indexSource(
   sourceConfig: SourceConfig,
   sourceStorage: SourceStorage,
   indexer: Indexer,
+  progress: ConsoleProgress,
 ): Promise<void> {
   console.log(`\nИндексация: ${sourceConfig.name}`);
 
@@ -56,7 +57,6 @@ async function indexSource(
   });
 
   // Сканируем файлы.
-  const progress = new ConsoleProgress();
   const files = await scanLocalFiles(resolvedPath, {
     include: sourceConfig.include,
     exclude: sourceConfig.exclude,
@@ -102,7 +102,7 @@ export const indexCommand = new Command('index')
 
           console.log(`Индексация всех источников (${config.sources.length})...`);
           for (const sourceConfig of config.sources) {
-            await indexSource(sourceConfig, sourceStorage, indexer);
+            await indexSource(sourceConfig, sourceStorage, indexer, progress);
           }
         } else if (options.path) {
           // Ad-hoc индексация: --path + --name.
@@ -112,7 +112,7 @@ export const indexCommand = new Command('index')
             type: 'local',
             path: options.path,
           };
-          await indexSource(sourceConfig, sourceStorage, indexer);
+          await indexSource(sourceConfig, sourceStorage, indexer, progress);
         } else if (nameArg) {
           // Индексация источника по имени из конфига.
           const sourceConfig = config.sources.find((s) => s.name === nameArg);
@@ -120,7 +120,7 @@ export const indexCommand = new Command('index')
             console.error(`Источник "${nameArg}" не найден в конфигурации.`);
             process.exit(1);
           }
-          await indexSource(sourceConfig, sourceStorage, indexer);
+          await indexSource(sourceConfig, sourceStorage, indexer, progress);
         } else {
           console.error('Укажите источник: rag index <name>, --path <dir> или --all');
           process.exit(1);
