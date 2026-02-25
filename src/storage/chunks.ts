@@ -26,12 +26,14 @@ export class ChunkStorage {
       const batch = chunks.slice(i, i + BATCH_SIZE);
 
       // Вставляем пачку в одной транзакции для снижения round-trip overhead.
-      await this.sql`BEGIN`;
-      try {
+      // Type assertion нужен: TransactionSql работает как tagged template в runtime,
+      // но TypeScript-типы пакета postgres не отражают это корректно.
+      await this.sql.begin(async (tx: unknown) => {
+        const query = tx as postgres.Sql;
         for (const chunk of batch) {
           const vectorStr = pgvector.toSql(chunk.embedding) as string;
 
-          await this.sql`
+          await query`
             INSERT INTO chunks (source_id, content, content_hash, metadata, embedding)
             VALUES (
               ${chunk.sourceId},
@@ -42,11 +44,7 @@ export class ChunkStorage {
             )
           `;
         }
-        await this.sql`COMMIT`;
-      } catch (error) {
-        await this.sql`ROLLBACK`;
-        throw error;
-      }
+      });
     }
   }
 

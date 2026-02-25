@@ -10,6 +10,7 @@ export function createDb(config: DatabaseConfig): postgres.Sql {
     database: config.name,
     username: config.user,
     password: config.password,
+    onnotice: () => { /* Подавляем NOTICE от PostgreSQL (например CREATE IF NOT EXISTS). */ },
   });
 }
 

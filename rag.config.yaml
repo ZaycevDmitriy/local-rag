@@ -1,0 +1,10 @@
+# Тестовый конфиг с mock-эмбеддингами.
+database:
+  host: localhost
+  port: 5432
+  name: local_rag
+  user: rag
+  password: rag
+
+embeddings:
+  provider: mock
