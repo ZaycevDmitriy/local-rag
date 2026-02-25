@@ -1,0 +1,9 @@
+// Barrel-файл модуля хранения.
+export { createDb, closeDb } from './db.js';
+
+export type { SourceRow, ChunkRow, IndexedFileRow } from './schema.js';
+
+export type { Migration } from './migrator.js';
+export { runMigrations, getAppliedMigrations } from './migrator.js';
+
+export { default as initialMigration } from './migrations/001_initial.js';
