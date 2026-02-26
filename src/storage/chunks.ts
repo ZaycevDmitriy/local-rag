@@ -122,6 +122,15 @@ export class ChunkStorage {
     `;
   }
 
+  // Возвращает количество чанков для источника.
+  async countBySource(sourceId: string): Promise<number> {
+    const result = await this.sql<Array<{ count: string }>>`
+      SELECT COUNT(*)::text AS count FROM chunks WHERE source_id = ${sourceId}
+    `;
+
+    return parseInt(result[0]!.count, 10);
+  }
+
   // Возвращает чанки по массиву ID в порядке переданных ID.
   async getByIds(ids: string[]): Promise<ChunkRow[]> {
     if (ids.length === 0) {

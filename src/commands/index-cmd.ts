@@ -3,7 +3,7 @@ import { Command } from 'commander';
 import { resolve } from 'node:path';
 import { loadConfig } from '../config/index.js';
 import type { SourceConfig } from '../config/schema.js';
-import { createDb, closeDb, SourceStorage, ChunkStorage } from '../storage/index.js';
+import { createDb, closeDb, SourceStorage, ChunkStorage, IndexedFileStorage } from '../storage/index.js';
 import { createTextEmbedder } from '../embeddings/index.js';
 import { ChunkDispatcher, MarkdownChunker, FixedSizeChunker } from '../chunks/index.js';
 import { scanLocalFiles } from '../sources/index.js';
@@ -82,6 +82,7 @@ export const indexCommand = new Command('index')
       try {
         const sourceStorage = new SourceStorage(sql);
         const chunkStorage = new ChunkStorage(sql);
+        const indexedFileStorage = new IndexedFileStorage(sql);
         const embedder = createTextEmbedder(config.embeddings);
         const dispatcher = createDispatcher(config.indexing.chunkSize);
         const progress = new ConsoleProgress();
@@ -91,6 +92,7 @@ export const indexCommand = new Command('index')
           embedder,
           dispatcher,
           progress,
+          indexedFileStorage,
         );
 
         if (options.all) {

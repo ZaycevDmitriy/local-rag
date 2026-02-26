@@ -1,9 +1,10 @@
-// Координатор поиска — оркестрирует BM25 + vector + RRF pipeline.
+// Координатор поиска — оркестрирует BM25 + vector + RRF + rerank pipeline.
 import type { SearchConfig } from '../config/schema.js';
 import type { TextEmbedder } from '../embeddings/types.js';
 import type { ChunkStorage } from '../storage/chunks.js';
 import type { SourceStorage } from '../storage/sources.js';
 import { rrfFuse } from './hybrid.js';
+import type { Reranker } from './reranker/types.js';
 import type { SearchQuery, SearchResponse, SearchResult } from './types.js';
 
 // Максимальная длина snippet в символах.
@@ -16,9 +17,10 @@ export class SearchCoordinator {
     private sourceStorage: SourceStorage,
     private embedder: TextEmbedder,
     private searchConfig: SearchConfig,
+    private reranker: Reranker,
   ) {}
 
-  // Выполняет hybrid search: embed -> parallel BM25 + vector -> RRF -> результаты.
+  // Выполняет hybrid search: embed -> parallel BM25 + vector -> RRF -> rerank -> результаты.
   async search(query: SearchQuery): Promise<SearchResponse> {
     // 1. Генерируем эмбеддинг запроса.
     const queryEmbedding = await this.embedder.embedQuery(query.query);
@@ -46,12 +48,11 @@ export class SearchCoordinator {
       this.searchConfig.vectorWeight,
     );
 
-    // 4. Берём top K результатов.
-    const topK = query.topK ?? this.searchConfig.finalTopK;
-    const topResults = fused.slice(0, topK);
+    // 4. Берём retrieveTopK кандидатов для реранкера.
+    const candidates = fused.slice(0, this.searchConfig.retrieveTopK);
 
-    // 5. Загружаем полные данные чанков.
-    const chunkIds = topResults.map((r) => r.id);
+    // 5. Загружаем полные данные чанков (один раз для реранкера и финального ответа).
+    const chunkIds = candidates.map((r) => r.id);
     const chunks = await this.chunkStorage.getByIds(chunkIds);
 
     // 6. Загружаем источники для маппинга имён.
@@ -61,14 +62,31 @@ export class SearchCoordinator {
     // 7. Строим карты оценок для BM25, vector и RRF.
     const bm25ScoreMap = new Map(bm25Results.map((r) => [r.id, r.score]));
     const vectorScoreMap = new Map(vectorResults.map((r) => [r.id, r.score]));
-    const rrfScoreMap = new Map(topResults.map((r) => [r.id, r.score]));
+    const rrfScoreMap = new Map(candidates.map((r) => [r.id, r.score]));
 
-    // 8. Собираем итоговые результаты.
-    const results: SearchResult[] = chunks.map((chunk) => {
+    // 8. Переранжируем кандидатов.
+    const topK = query.topK ?? this.searchConfig.finalTopK;
+    const rerankDocs = chunks.map((chunk) => ({
+      id: chunk.id,
+      content: chunk.content,
+    }));
+    const rerankResults = await this.reranker.rerank(query.query, rerankDocs, topK);
+    const rerankScoreMap = new Map(rerankResults.map((r) => [r.id, r.score]));
+
+    // 9. Собираем итоговые результаты в порядке реранкера.
+    const chunkMap = new Map(chunks.map((c) => [c.id, c]));
+    const results: SearchResult[] = [];
+
+    for (const rerankResult of rerankResults) {
+      const chunk = chunkMap.get(rerankResult.id);
+      if (!chunk) {
+        continue;
+      }
+
       const metadata = chunk.metadata as Record<string, unknown>;
       const source = sourceMap.get(chunk.source_id);
 
-      return {
+      results.push({
         chunkId: chunk.id,
         path: (metadata.path as string) ?? '',
         sourceType: (metadata.sourceType as string) ?? 'text',
@@ -87,10 +105,10 @@ export class SearchCoordinator {
           bm25: bm25ScoreMap.get(chunk.id) ?? null,
           vector: vectorScoreMap.get(chunk.id) ?? null,
           rrf: rrfScoreMap.get(chunk.id) ?? 0,
-          rerank: null, // Rerank будет добавлен в Фазе 2.
+          rerank: rerankScoreMap.get(chunk.id) ?? null,
         },
-      };
-    });
+      });
+    }
 
     return {
       results,
