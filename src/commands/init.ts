@@ -1,7 +1,14 @@
 // Команда rag init — инициализация базы данных.
 import { Command } from 'commander';
 import { loadConfig } from '../config/index.js';
-import { createDb, closeDb, runMigrations, initialMigration } from '../storage/index.js';
+import {
+  createDb,
+  closeDb,
+  runMigrations,
+  initialMigration,
+  createVectorDimensionsMigration,
+} from '../storage/index.js';
+import type { Migration } from '../storage/index.js';
 
 export const initCommand = new Command('init')
   .description('Initialize database (run migrations)')
@@ -13,7 +20,19 @@ export const initCommand = new Command('init')
 
       try {
         console.log('Инициализация базы данных...');
-        await runMigrations(sql, [initialMigration]);
+
+        // Определяем размерность вектора из конфигурации провайдера.
+        const dimensions =
+          config.embeddings.jina?.dimensions ??
+          config.embeddings.openai?.dimensions ??
+          1024;
+
+        const migrations: Migration[] = [initialMigration];
+        if (dimensions !== 1024) {
+          migrations.push(createVectorDimensionsMigration(dimensions));
+        }
+
+        await runMigrations(sql, migrations);
         console.log('База данных успешно инициализирована.');
       } finally {
         await closeDb(sql);

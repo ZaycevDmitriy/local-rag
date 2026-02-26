@@ -4,6 +4,9 @@
 import { Command } from 'commander';
 import { initCommand } from './commands/init.js';
 import { indexCommand } from './commands/index-cmd.js';
+import { listCommand } from './commands/list-cmd.js';
+import { removeCommand } from './commands/remove-cmd.js';
+import { statusCommand } from './commands/status-cmd.js';
 
 const program = new Command()
   .name('rag')
@@ -12,5 +15,8 @@ const program = new Command()
 
 program.addCommand(initCommand);
 program.addCommand(indexCommand);
+program.addCommand(listCommand);
+program.addCommand(removeCommand);
+program.addCommand(statusCommand);
 
 program.parse();

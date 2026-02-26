@@ -1,5 +1,5 @@
+// Тесты для OpenAITextEmbedder.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { JinaTextEmbedder } from '../jina.js';
 import { OpenAITextEmbedder } from '../openai.js';
 import { createTextEmbedder } from '../factory.js';
 
@@ -8,33 +8,32 @@ function fakeVector(dimensions: number, seed = 0): number[] {
   return Array.from({ length: dimensions }, (_, i) => (i + seed) * 0.001);
 }
 
-// Создание мок-ответа Jina API.
-function makeJinaResponse(vectors: number[][]): JinaApiResponse {
+// Создание мок-ответа OpenAI API.
+function makeOpenAIResponse(vectors: number[][]): OpenAIApiResponse {
   return {
     data: vectors.map((embedding, index) => ({ index, embedding })),
   };
 }
 
-// Тип ответа Jina API для тестов.
-interface JinaApiResponse {
+// Тип ответа OpenAI API для тестов.
+interface OpenAIApiResponse {
   data: Array<{ index: number; embedding: number[] }>;
 }
 
-// Тело запроса к Jina API для проверок.
-interface JinaRequestBody {
+// Тело запроса к OpenAI API для проверок.
+interface OpenAIRequestBody {
   model: string;
   input: string[];
-  task: string;
   dimensions: number;
 }
 
 const DEFAULT_CONFIG = {
   apiKey: 'test-api-key',
-  model: 'jina-embeddings-v3',
-  dimensions: 1024,
+  model: 'text-embedding-3-small',
+  dimensions: 1536,
 };
 
-describe('JinaTextEmbedder', () => {
+describe('OpenAITextEmbedder', () => {
   let fetchMock: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
@@ -47,65 +46,66 @@ describe('JinaTextEmbedder', () => {
   });
 
   it('embed() возвращает вектор корректной размерности', async () => {
-    const vector = fakeVector(1024);
+    const vector = fakeVector(1536);
     fetchMock.mockResolvedValueOnce({
       ok: true,
       status: 200,
-      json: async () => makeJinaResponse([vector]),
+      json: async () => makeOpenAIResponse([vector]),
     });
 
-    const embedder = new JinaTextEmbedder(DEFAULT_CONFIG);
+    const embedder = new OpenAITextEmbedder(DEFAULT_CONFIG);
     const result = await embedder.embed('test text');
 
-    expect(result).toHaveLength(1024);
+    expect(result).toHaveLength(1536);
     expect(result).toEqual(vector);
   });
 
-  it('embed() отправляет корректное тело запроса с task: retrieval.passage', async () => {
-    const vector = fakeVector(1024);
+  it('embed() отправляет корректное тело запроса без поля task', async () => {
+    const vector = fakeVector(1536);
     fetchMock.mockResolvedValueOnce({
       ok: true,
       status: 200,
-      json: async () => makeJinaResponse([vector]),
+      json: async () => makeOpenAIResponse([vector]),
     });
 
-    const embedder = new JinaTextEmbedder(DEFAULT_CONFIG);
+    const embedder = new OpenAITextEmbedder(DEFAULT_CONFIG);
     await embedder.embed('test text');
 
     expect(fetchMock).toHaveBeenCalledOnce();
 
     const [url, options] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(url).toBe('https://api.jina.ai/v1/embeddings');
+    expect(url).toBe('https://api.openai.com/v1/embeddings');
     expect(options.method).toBe('POST');
 
     const headers = options.headers as Record<string, string>;
     expect(headers['Authorization']).toBe('Bearer test-api-key');
     expect(headers['Content-Type']).toBe('application/json');
 
-    const body = JSON.parse(options.body as string) as JinaRequestBody;
-    expect(body.model).toBe('jina-embeddings-v3');
+    const body = JSON.parse(options.body as string) as OpenAIRequestBody & { task?: string };
+    expect(body.model).toBe('text-embedding-3-small');
     expect(body.input).toEqual(['test text']);
-    expect(body.task).toBe('retrieval.passage');
-    expect(body.dimensions).toBe(1024);
+    expect(body.dimensions).toBe(1536);
+    // OpenAI не использует поле task.
+    expect(body.task).toBeUndefined();
   });
 
-  it('embedBatch() разбивает входные данные на батчи по 64', async () => {
-    // Создаём 150 элементов — должно быть 3 батча: 64, 64, 22.
-    const inputs = Array.from({ length: 150 }, (_, i) => `text ${i}`);
+  it('embedBatch() разбивает входные данные на батчи по 100', async () => {
+    // Создаём 250 элементов — должно быть 3 батча: 100, 100, 50.
+    const inputs = Array.from({ length: 250 }, (_, i) => `text ${i}`);
     const dimensions = 128;
     const config = { ...DEFAULT_CONFIG, dimensions };
 
     fetchMock.mockImplementation(async (_url: string, options: RequestInit) => {
-      const body = JSON.parse(options.body as string) as JinaRequestBody;
+      const body = JSON.parse(options.body as string) as OpenAIRequestBody;
       const vectors = body.input.map((_, i) => fakeVector(dimensions, i));
       return {
         ok: true,
         status: 200,
-        json: async () => makeJinaResponse(vectors),
+        json: async () => makeOpenAIResponse(vectors),
       };
     });
 
-    const embedder = new JinaTextEmbedder(config);
+    const embedder = new OpenAITextEmbedder(config);
     const results = await embedder.embedBatch(inputs);
 
     // Должно быть 3 вызова API.
@@ -114,66 +114,40 @@ describe('JinaTextEmbedder', () => {
     // Проверяем размеры батчей.
     const batchSizes = fetchMock.mock.calls.map((call: unknown[]) => {
       const options = call[1] as RequestInit;
-      const body = JSON.parse(options.body as string) as JinaRequestBody;
+      const body = JSON.parse(options.body as string) as OpenAIRequestBody;
       return body.input.length;
     });
-    expect(batchSizes).toEqual([64, 64, 22]);
+    expect(batchSizes).toEqual([100, 100, 50]);
 
     // Общее количество результатов.
-    expect(results).toHaveLength(150);
-  });
-
-  it('embedBatch() возвращает результаты в правильном порядке', async () => {
-    const dimensions = 4;
-    const inputs = ['first', 'second', 'third'];
-    const config = { ...DEFAULT_CONFIG, dimensions };
-
-    const vectors = [
-      [1, 0, 0, 0],
-      [0, 1, 0, 0],
-      [0, 0, 1, 0],
-    ];
-
-    fetchMock.mockResolvedValueOnce({
-      ok: true,
-      status: 200,
-      json: async () => makeJinaResponse(vectors),
-    });
-
-    const embedder = new JinaTextEmbedder(config);
-    const results = await embedder.embedBatch(inputs);
-
-    expect(results).toEqual(vectors);
-    expect(results[0]).toEqual([1, 0, 0, 0]);
-    expect(results[1]).toEqual([0, 1, 0, 0]);
-    expect(results[2]).toEqual([0, 0, 1, 0]);
+    expect(results).toHaveLength(250);
   });
 
   it('embedBatch() возвращает пустой массив для пустого входа', async () => {
-    const embedder = new JinaTextEmbedder(DEFAULT_CONFIG);
+    const embedder = new OpenAITextEmbedder(DEFAULT_CONFIG);
     const results = await embedder.embedBatch([]);
 
     expect(results).toEqual([]);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('embedQuery() использует task: retrieval.query', async () => {
-    const vector = fakeVector(1024);
+  it('embedQuery() идентична embed() (нет поля task)', async () => {
+    const vector = fakeVector(1536);
     fetchMock.mockResolvedValueOnce({
       ok: true,
       status: 200,
-      json: async () => makeJinaResponse([vector]),
+      json: async () => makeOpenAIResponse([vector]),
     });
 
-    const embedder = new JinaTextEmbedder(DEFAULT_CONFIG);
+    const embedder = new OpenAITextEmbedder(DEFAULT_CONFIG);
     const result = await embedder.embedQuery('search query');
 
     expect(result).toEqual(vector);
 
     const [, options] = fetchMock.mock.calls[0] as [string, RequestInit];
-    const body = JSON.parse(options.body as string) as JinaRequestBody;
-    expect(body.task).toBe('retrieval.query');
+    const body = JSON.parse(options.body as string) as OpenAIRequestBody & { task?: string };
     expect(body.input).toEqual(['search query']);
+    expect(body.task).toBeUndefined();
   });
 
   it('выбрасывает ошибку при не-ok статусе ответа API', async () => {
@@ -183,10 +157,10 @@ describe('JinaTextEmbedder', () => {
       statusText: 'Bad Request',
     });
 
-    const embedder = new JinaTextEmbedder(DEFAULT_CONFIG);
+    const embedder = new OpenAITextEmbedder(DEFAULT_CONFIG);
 
     await expect(embedder.embed('test')).rejects.toThrow(
-      'Jina API error: 400 Bad Request',
+      'OpenAI API error: 400 Bad Request',
     );
   });
 
@@ -200,9 +174,8 @@ describe('JinaTextEmbedder', () => {
     });
 
     it('повторяет запрос при 429 (rate limit)', async () => {
-      const vector = fakeVector(1024);
+      const vector = fakeVector(1536);
 
-      // Первый вызов — 429, второй — успех.
       fetchMock
         .mockResolvedValueOnce({
           ok: false,
@@ -212,13 +185,12 @@ describe('JinaTextEmbedder', () => {
         .mockResolvedValueOnce({
           ok: true,
           status: 200,
-          json: async () => makeJinaResponse([vector]),
+          json: async () => makeOpenAIResponse([vector]),
         });
 
-      const embedder = new JinaTextEmbedder(DEFAULT_CONFIG);
+      const embedder = new OpenAITextEmbedder(DEFAULT_CONFIG);
       const promise = embedder.embed('test');
 
-      // Продвигаем таймер на 1с (первый retry delay).
       await vi.advanceTimersByTimeAsync(1000);
 
       const result = await promise;
@@ -228,9 +200,8 @@ describe('JinaTextEmbedder', () => {
     });
 
     it('повторяет запрос при 5xx ошибке сервера', async () => {
-      const vector = fakeVector(1024);
+      const vector = fakeVector(1536);
 
-      // Первый вызов — 500, второй — успех.
       fetchMock
         .mockResolvedValueOnce({
           ok: false,
@@ -240,13 +211,12 @@ describe('JinaTextEmbedder', () => {
         .mockResolvedValueOnce({
           ok: true,
           status: 200,
-          json: async () => makeJinaResponse([vector]),
+          json: async () => makeOpenAIResponse([vector]),
         });
 
-      const embedder = new JinaTextEmbedder(DEFAULT_CONFIG);
+      const embedder = new OpenAITextEmbedder(DEFAULT_CONFIG);
       const promise = embedder.embed('test');
 
-      // Продвигаем таймер на 1с (первый retry delay).
       await vi.advanceTimersByTimeAsync(1000);
 
       const result = await promise;
@@ -256,22 +226,19 @@ describe('JinaTextEmbedder', () => {
     });
 
     it('выбрасывает ошибку после исчерпания всех retry-попыток', async () => {
-      // Все вызовы — 429.
       fetchMock.mockResolvedValue({
         ok: false,
         status: 429,
         statusText: 'Too Many Requests',
       });
 
-      const embedder = new JinaTextEmbedder(DEFAULT_CONFIG);
+      const embedder = new OpenAITextEmbedder(DEFAULT_CONFIG);
 
-      // Запускаем запрос и сразу ловим rejection, чтобы избежать unhandled rejection.
       let caughtError: Error | undefined;
       const promise = embedder.embed('test').catch((err: Error) => {
         caughtError = err;
       });
 
-      // Продвигаем таймеры: 1с + 2с + 4с = 7с для всех retry.
       await vi.advanceTimersByTimeAsync(1000);
       await vi.advanceTimersByTimeAsync(2000);
       await vi.advanceTimersByTimeAsync(4000);
@@ -279,46 +246,25 @@ describe('JinaTextEmbedder', () => {
       await promise;
 
       expect(caughtError).toBeDefined();
-      expect(caughtError!.message).toBe('Jina API error: 429 Too Many Requests');
-
+      expect(caughtError!.message).toBe('OpenAI API error: 429 Too Many Requests');
       // 1 начальная попытка + 3 retry = 4 вызова.
       expect(fetchMock).toHaveBeenCalledTimes(4);
     });
   });
 
   it('dimensions доступен как свойство', () => {
-    const embedder = new JinaTextEmbedder(DEFAULT_CONFIG);
-    expect(embedder.dimensions).toBe(1024);
+    const embedder = new OpenAITextEmbedder(DEFAULT_CONFIG);
+    expect(embedder.dimensions).toBe(1536);
 
-    const customEmbedder = new JinaTextEmbedder({
+    const customEmbedder = new OpenAITextEmbedder({
       ...DEFAULT_CONFIG,
-      dimensions: 512,
+      dimensions: 256,
     });
-    expect(customEmbedder.dimensions).toBe(512);
+    expect(customEmbedder.dimensions).toBe(256);
   });
 });
 
-describe('createTextEmbedder', () => {
-  it('создаёт JinaTextEmbedder для провайдера jina', () => {
-    const embedder = createTextEmbedder({
-      provider: 'jina',
-      jina: {
-        apiKey: 'test-key',
-        model: 'jina-embeddings-v3',
-        dimensions: 1024,
-      },
-    });
-
-    expect(embedder).toBeInstanceOf(JinaTextEmbedder);
-    expect(embedder.dimensions).toBe(1024);
-  });
-
-  it('выбрасывает ошибку, если jina конфиг отсутствует', () => {
-    expect(() =>
-      createTextEmbedder({ provider: 'jina' }),
-    ).toThrow('Jina embeddings config is required when provider is "jina"');
-  });
-
+describe('createTextEmbedder (openai)', () => {
   it('создаёт OpenAITextEmbedder для провайдера openai', () => {
     const embedder = createTextEmbedder({
       provider: 'openai',
@@ -328,12 +274,14 @@ describe('createTextEmbedder', () => {
         dimensions: 1536,
       },
     });
+
     expect(embedder).toBeInstanceOf(OpenAITextEmbedder);
+    expect(embedder.dimensions).toBe(1536);
   });
 
-  it('выбрасывает ошибку для провайдера self-hosted (ещё не реализован)', () => {
+  it('выбрасывает ошибку, если openai конфиг отсутствует', () => {
     expect(() =>
-      createTextEmbedder({ provider: 'self-hosted' }),
-    ).toThrow('Self-hosted embedder not implemented yet');
+      createTextEmbedder({ provider: 'openai' }),
+    ).toThrow('OpenAI embeddings config is required when provider is "openai"');
   });
 });

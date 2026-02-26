@@ -65,11 +65,11 @@ async function indexSource(
     });
 
     // Сканируем файлы из локальной копии.
-    const files = await scanLocalFiles(localPath, {
+    const { files, excludedCount } = await scanLocalFiles(localPath, {
       include: sourceConfig.include,
       exclude: sourceConfig.exclude,
     });
-    progress.onScanComplete(files.length, 0);
+    progress.onScanComplete(files.length, excludedCount);
 
     // Запускаем индексацию.
     await indexer.indexSource(source, files);
@@ -95,11 +95,11 @@ async function indexSource(
   });
 
   // Сканируем файлы.
-  const files = await scanLocalFiles(resolvedPath, {
+  const { files, excludedCount } = await scanLocalFiles(resolvedPath, {
     include: sourceConfig.include,
     exclude: sourceConfig.exclude,
   });
-  progress.onScanComplete(files.length, 0);
+  progress.onScanComplete(files.length, excludedCount);
 
   // Запускаем индексацию.
   await indexer.indexSource(source, files);

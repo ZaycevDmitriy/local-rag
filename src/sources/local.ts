@@ -2,6 +2,7 @@
 import fg from 'fast-glob';
 import { readFile, stat } from 'node:fs/promises';
 import { resolve, relative } from 'node:path';
+import { FileFilter } from './file-filter.js';
 
 // Результат сканирования одного файла.
 export interface ScannedFile {
@@ -10,81 +11,61 @@ export interface ScannedFile {
   content: string;
 }
 
+// Результат сканирования директории.
+export interface ScanResult {
+  files: ScannedFile[];
+  excludedCount: number;
+}
+
 // Максимальный размер файла для индексации (1 МБ).
 const MAX_FILE_SIZE = 1024 * 1024;
-
-// Паттерны, исключаемые всегда.
-const BUILTIN_EXCLUDES = [
-  '**/node_modules/**',
-  '**/.git/**',
-  '**/dist/**',
-  '**/.next/**',
-  '**/coverage/**',
-  '**/__pycache__/**',
-];
-
-// Расширения бинарных файлов.
-const BINARY_EXTENSIONS = new Set([
-  '.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico',
-  '.woff', '.woff2', '.ttf', '.eot',
-  '.mp3', '.mp4',
-  '.zip', '.tar', '.gz',
-  '.exe', '.dll', '.so', '.dylib',
-]);
-
-// Проверяет, является ли файл бинарным по расширению.
-function isBinaryFile(filePath: string): boolean {
-  const dotIndex = filePath.lastIndexOf('.');
-  if (dotIndex === -1) {
-    return false;
-  }
-  const ext = filePath.slice(dotIndex).toLowerCase();
-  return BINARY_EXTENSIONS.has(ext);
-}
 
 /**
  * Сканирует локальную директорию и возвращает список файлов с содержимым.
  *
  * Алгоритм:
  * 1. fast-glob сканирует basePath с include-паттернами (по умолчанию **\/*).
- * 2. Применяет exclude-паттерны (встроенные + пользовательские).
- * 3. Пропускает бинарные файлы и файлы > 1 МБ.
+ * 2. FileFilter применяет .gitignore, .ragignore, встроенные и конфиг exclude.
+ * 3. Пропускает файлы > 1 МБ.
  * 4. Читает содержимое каждого файла.
  */
 export async function scanLocalFiles(
   basePath: string,
   options?: { include?: string[]; exclude?: string[] },
-): Promise<ScannedFile[]> {
+): Promise<ScanResult> {
   const resolvedBase = resolve(basePath);
   const includePatterns = options?.include ?? ['**/*'];
-  const excludePatterns = [
-    ...BUILTIN_EXCLUDES,
-    ...(options?.exclude ?? []),
-  ];
 
-  // Получаем список файлов через fast-glob.
+  // fast-glob: минимальный ignore для производительности.
   const paths = await fg(includePatterns, {
     cwd: resolvedBase,
-    ignore: excludePatterns,
+    ignore: ['**/node_modules/**', '**/.git/**'],
     dot: false,
     onlyFiles: true,
     absolute: false,
   });
 
+  // Создаём FileFilter и загружаем .gitignore/.ragignore.
+  const filter = new FileFilter(resolvedBase, options?.exclude);
+  await filter.init();
+
   const files: ScannedFile[] = [];
+  let excludedCount = 0;
 
   for (const relPath of paths) {
-    const absPath = resolve(resolvedBase, relPath);
-
-    // Пропускаем бинарные файлы.
-    if (isBinaryFile(relPath)) {
+    // Применяем FileFilter.
+    if (!filter.shouldInclude(relPath)) {
+      excludedCount++;
       continue;
     }
+
+    const absPath = resolve(resolvedBase, relPath);
 
     // Проверяем размер файла.
     try {
       const fileStat = await stat(absPath);
       if (fileStat.size > MAX_FILE_SIZE) {
+        excludedCount++;
         continue;
       }
     } catch {
@@ -106,5 +87,5 @@ export async function scanLocalFiles(
     }
   }
 
-  return files;
+  return { files, excludedCount };
 }
