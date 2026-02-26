@@ -11,3 +11,8 @@ embeddings:
     apiKey: ${JINA_API_KEY}
     model: jina-embeddings-v3
     dimensions: 1024
+
+reranker:
+  provider: jina
+  jina:
+    apiKey: ${JINA_API_KEY}
