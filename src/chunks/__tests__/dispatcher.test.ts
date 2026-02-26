@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { ChunkDispatcher } from '../dispatcher.js';
 import { MarkdownChunker } from '../markdown/markdown-chunker.js';
 import { FixedSizeChunker } from '../text/fixed-chunker.js';
+import { TreeSitterChunker } from '../code/tree-sitter-chunker.js';
 import type { Chunk, Chunker, FileContent } from '../types.js';
 
 const config = { maxTokens: 500, overlap: 50 };
@@ -57,6 +58,19 @@ describe('ChunkDispatcher', () => {
 
     expect(result).toHaveLength(1);
     expect(result[0]!.metadata.sourceType).toBe('text');
+  });
+
+  it('выбирает TreeSitterChunker для .ts файлов', () => {
+    const tsChunker = new TreeSitterChunker(config);
+    const mdChunker = new MarkdownChunker(config);
+    const fallback = new FixedSizeChunker(config);
+    const dispatcher = new ChunkDispatcher([tsChunker, mdChunker], fallback);
+
+    const file = makeFile('function hello(): void {}', 'index.ts');
+    const result = dispatcher.chunk(file);
+
+    expect(result.length).toBeGreaterThan(0);
+    expect(result[0]!.metadata.sourceType).toBe('code');
   });
 
   it('первый подходящий chunker выигрывает', () => {

@@ -12,3 +12,5 @@ export { createChunk } from './types.js';
 export { MarkdownChunker } from './markdown/markdown-chunker.js';
 export { FixedSizeChunker } from './text/fixed-chunker.js';
 export { ChunkDispatcher } from './dispatcher.js';
+export { TreeSitterChunker } from './code/tree-sitter-chunker.js';
+export { FallbackChunker } from './code/fallback-chunker.js';
