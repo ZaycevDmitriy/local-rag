@@ -95,4 +95,69 @@ describe('captureLeadingAnnotations', () => {
     // annotationNode идёт сразу перед methodNode — строка 1+1 = 2.
     expect(captureLeadingAnnotations(methodNode)).toBe(2);
   });
+
+  it('block_comment захватывается при передаче в commentTypes', () => {
+    const javadocNode = { type: 'block_comment', startPosition: { row: 3 } };
+    const classNode = {
+      startPosition: { row: 5 },
+      parent: null as unknown as object,
+      children: [],
+    };
+    const parent = { children: [javadocNode, classNode] };
+    classNode.parent = parent;
+    // Без commentTypes — block_comment не захватывается.
+    expect(captureLeadingAnnotations(classNode)).toBe(6);
+    // С commentTypes — захватывается.
+    expect(captureLeadingAnnotations(classNode, undefined, ['block_comment'])).toBe(4);
+  });
+
+  it('line_comment захватывается при передаче в commentTypes', () => {
+    const lineComment = { type: 'line_comment', startPosition: { row: 7 } };
+    const classNode = {
+      startPosition: { row: 8 },
+      parent: null as unknown as object,
+      children: [],
+    };
+    const parent = { children: [lineComment, classNode] };
+    classNode.parent = parent;
+    expect(captureLeadingAnnotations(classNode, undefined, ['line_comment'])).toBe(8);
+  });
+
+  it('несколько block_comment подряд → захватываются все', () => {
+    const doc1 = { type: 'block_comment', startPosition: { row: 0 } };
+    const doc2 = { type: 'block_comment', startPosition: { row: 1 } };
+    const classNode = {
+      startPosition: { row: 2 },
+      parent: null as unknown as object,
+      children: [],
+    };
+    const parent = { children: [doc1, doc2, classNode] };
+    classNode.parent = parent;
+    expect(captureLeadingAnnotations(classNode, undefined, ['block_comment'])).toBe(1);
+  });
+
+  it('обратная совместимость — вызов без параметров работает как раньше', () => {
+    const markerAnnotation = { type: 'marker_annotation', startPosition: { row: 10 } };
+    const methodNode = {
+      startPosition: { row: 11 },
+      parent: null as unknown as object,
+      children: [],
+    };
+    const parent = { children: [markerAnnotation, methodNode] };
+    methodNode.parent = parent;
+    // Вызов без параметров — старое поведение сохранено.
+    expect(captureLeadingAnnotations(methodNode)).toBe(11);
+  });
+
+  it('кастомные annotationTypes захватывают указанный тип', () => {
+    const customAnno = { type: 'custom_annotation', startPosition: { row: 2 } };
+    const node = {
+      startPosition: { row: 3 },
+      parent: null as unknown as object,
+      children: [],
+    };
+    const parent = { children: [customAnno, node] };
+    node.parent = parent;
+    expect(captureLeadingAnnotations(node, ['custom_annotation'])).toBe(3);
+  });
 });

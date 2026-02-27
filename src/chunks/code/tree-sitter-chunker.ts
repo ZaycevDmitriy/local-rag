@@ -2,7 +2,8 @@ import { createRequire } from 'node:module';
 import { createChunk } from '../types.js';
 import type { Chunk, ChunkMetadata, ChunkSizeConfig, Chunker, FileContent } from '../types.js';
 import { getLanguageForFile, isTreeSitterSupported } from './languages.js';
-import { extractNodes } from './ts-extractor.js';
+import { extractNodes as extractTsNodes } from './ts-extractor.js';
+import { extractNodes as extractJavaNodes } from './java-extractor.js';
 import type { ExtractedNode, ExtractorFn } from './extractor-types.js';
 
 const require = createRequire(import.meta.url);
@@ -17,10 +18,11 @@ function getExtractor(langName: string): ExtractorFn {
   case 'tsx':
   case 'javascript':
   case 'jsx':
-    return extractNodes;
+    return extractTsNodes;
   case 'java':
+    return extractJavaNodes;
   case 'kotlin':
-    // Заглушки — реализация в фазах 6-7.
+    // Заглушка — реализация в фазе 7.
     return () => [];
   default:
     return () => [];
@@ -107,7 +109,7 @@ export class TreeSitterChunker implements Chunker {
     node: ExtractedNode,
     language: string,
   ): Chunk[] {
-    const { text, fqn, fragmentType, startLine, endLine } = node;
+    const { text, fqn, fragmentType, startLine, endLine, fragmentSubtype, receiverType } = node;
 
     if (text.length <= this.maxChars) {
       const metadata: ChunkMetadata = {
@@ -118,6 +120,8 @@ export class TreeSitterChunker implements Chunker {
         fragmentType,
         startLine,
         endLine,
+        ...(fragmentSubtype && { fragmentSubtype }),
+        ...(receiverType && { receiverType }),
       };
       return [createChunk(file.sourceId, text, metadata)];
     }
@@ -153,6 +157,8 @@ export class TreeSitterChunker implements Chunker {
           fragmentType: node.fragmentType,
           startLine: chunkStartLine,
           endLine,
+          ...(node.fragmentSubtype && { fragmentSubtype: node.fragmentSubtype }),
+          ...(node.receiverType && { receiverType: node.receiverType }),
         };
         chunks.push(createChunk(file.sourceId, content, metadata));
 
@@ -179,6 +185,8 @@ export class TreeSitterChunker implements Chunker {
         fragmentType: node.fragmentType,
         startLine: chunkStartLine,
         endLine,
+        ...(node.fragmentSubtype && { fragmentSubtype: node.fragmentSubtype }),
+        ...(node.receiverType && { receiverType: node.receiverType }),
       };
       chunks.push(createChunk(file.sourceId, content, metadata));
     }

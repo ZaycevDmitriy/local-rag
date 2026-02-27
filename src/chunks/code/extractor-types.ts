@@ -41,21 +41,27 @@ export function toLine(row: number): number {
   return row + 1;
 }
 
-// Собирает leading-аннотации перед узлом (для Java/Kotlin).
-// Возвращает строку начала первой аннотации (1-based) или startLine узла если аннотаций нет.
-export function captureLeadingAnnotations(node: SyntaxNode): number {
+// Собирает leading-аннотации и комментарии перед узлом.
+// Возвращает строку начала первого найденного предшественника (1-based) или startLine узла.
+// annotationTypes — типы нод-аннотаций (по умолчанию Kotlin/TS стиль).
+// commentTypes — дополнительные типы комментариев (например Javadoc для Java).
+export function captureLeadingAnnotations(
+  node: SyntaxNode,
+  annotationTypes: string[] = ['annotation', 'marker_annotation'],
+  commentTypes: string[] = [],
+): number {
   let firstAnnotationLine = toLine(node.startPosition.row);
   const parent = node.parent;
   if (!parent) {
     return firstAnnotationLine;
   }
 
-  // Ищем аннотации среди предшествующих сиблингов.
+  // Ищем аннотации/комментарии среди предшествующих сиблингов.
   const siblings = parent.children as SyntaxNode[];
   const nodeIndex = siblings.indexOf(node);
   for (let i = nodeIndex - 1; i >= 0; i--) {
     const sibling = siblings[i];
-    if (sibling.type === 'annotation' || sibling.type === 'marker_annotation') {
+    if (annotationTypes.includes(sibling.type) || commentTypes.includes(sibling.type)) {
       firstAnnotationLine = toLine(sibling.startPosition.row);
     } else {
       break;
