@@ -13,6 +13,7 @@
 - **Git-источники** — автоматическое клонирование/обновление репозиториев
 - **Фильтрация** — учитывает `.gitignore`, поддерживает `.ragignore`, include/exclude паттерны
 - **Переключаемые провайдеры** — Jina Embeddings v3, OpenAI, Jina Reranker v2
+- **Export / Import** — портативный backup в `.tar.gz`, перенос данных между машинами, re-embed при смене провайдера
 
 ## Quick Start
 
@@ -91,6 +92,9 @@ npx rag index --all
 | `rag list` | Список проиндексированных источников |
 | `rag remove <name>` | Удаление источника и всех его чанков |
 | `rag status` | Статус системы: БД, провайдеры, статистика |
+| `rag export` | Экспорт источников в портативный архив (.tar.gz) |
+| `rag import <file>` | Импорт источников из архива |
+| `rag re-embed` | Генерация эмбеддингов для чанков с NULL embedding |
 
 ### Опции index
 
@@ -102,6 +106,43 @@ npx rag index --all
 | `-n, --name <name>` | Имя источника |
 | `-a, --all` | Индексировать все источники из конфига |
 | `-c, --config <path>` | Путь к файлу конфигурации |
+
+### Export / Import / Re-embed
+
+#### rag export
+
+```bash
+rag export                         # Интерактивный выбор источников
+rag export --all                   # Все источники
+rag export --source my-project     # Конкретный источник
+rag export --dry-run               # Показать сводку без экспорта
+rag export --no-embeddings         # Без эмбеддингов (компактный файл)
+rag export --no-compress           # Без gzip-сжатия (.tar)
+rag export --output backup.tar.gz  # Путь к выходному файлу
+```
+
+Формат архива: `.tar.gz` с `manifest.json`, `config.yaml` (санитизированный, без секретов) и SQL-файлами для каждого источника.
+
+#### rag import
+
+```bash
+rag import backup.tar.gz                    # Интерактивный выбор
+rag import backup.tar.gz --all              # Все источники из архива
+rag import backup.tar.gz --force            # Перезаписать без вопросов
+rag import backup.tar.gz --remap-path /old=/new  # Замена базового пути
+```
+
+При импорте проверяется совпадение версии схемы БД. Если источник уже существует — запрашивается подтверждение (или `--force`).
+
+#### rag re-embed
+
+```bash
+rag re-embed                       # Все чанки с NULL embedding
+rag re-embed --source my-project   # Только конкретный источник
+rag re-embed --force               # Перегенерировать ВСЕ (включая существующие)
+```
+
+Типичные сценарии: после импорта с `--no-embeddings`, при смене провайдера (Jina -> OpenAI) через `--force`.
 
 ## Конфигурация
 
@@ -296,8 +337,9 @@ dist/
           +-------------+-------------+
           |                           |
      CLI (rag)                  MCP Server
-     index/list/                search/read/
-     remove/status              list/status
+     index/list/remove/         search/read/
+     status/export/             list/status
+     import/re-embed
           |                           |
           +-------------+-------------+
                         |
@@ -339,7 +381,7 @@ Query -> embed -> parallel [BM25 (tsvector, top 50), Vector (pgvector cosine, to
 | MCP | @modelcontextprotocol/sdk (stdio) |
 | CLI | Commander |
 | Конфиг | YAML + Zod-валидация |
-| Тесты | Vitest (288 тестов) |
+| Тесты | Vitest (336 тестов) |
 
 ## Разработка
 
@@ -370,7 +412,8 @@ src/
   cli.ts                    # CLI entry point (Commander)
   mcp-entry.ts              # MCP server entry point
   config/                   # Zod-схемы, YAML-загрузчик, дефолты
-  commands/                 # init, index, list, remove, status
+  commands/                 # init, index, list, remove, status, export, import, re-embed
+  export/                   # Экспорт/импорт: manifest, archive, exporter, importer, sanitizer
   chunks/                   # Markdown, FixedSize, TreeSitter, Fallback, Dispatcher
     code/                   # tree-sitter + fallback chunkers
   embeddings/               # Jina, OpenAI, factory

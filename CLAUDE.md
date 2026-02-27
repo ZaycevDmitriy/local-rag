@@ -38,6 +38,7 @@ Local RAG — персональная система семантическог
 | `src/storage/` | PostgreSQL: схема, миграции, CRUD для chunks и sources |
 | `src/mcp/` | MCP stdio сервер + 4 tool-обработчика |
 | `src/indexer/` | Оркестрация индексации, инкрементальность (hash-сравнение), прогресс |
+| `src/export/` | Export/import: manifest, archive (tar.gz), SQL exporter/importer, config sanitizer |
 | `src/config/` | Zod-схема конфига, загрузка YAML, дефолты |
 
 ### Search Pipeline
@@ -69,6 +70,9 @@ rag index --all         # Индексация всех источников и�
 rag status              # Статус системы
 rag list                # Список источников
 rag remove <name>       # Удаление источника
+rag export --all        # Экспорт всех источников в .tar.gz
+rag import <file> --all # Импорт из архива
+rag re-embed            # Генерация эмбеддингов для NULL чанков
 ```
 
 ## Database
@@ -97,6 +101,11 @@ HNSW-индекс на `embedding`, GIN-индекс на `search_vector`. Ра�
 2. **MCP + rerank** — Jina reranker, MCP stdio сервер с 4 инструментами, инкрементальная индексация
 3. **Код** — tree-sitter chunker (TS/JS), fallback chunker, Git-источники
 4. **Полировка** — .gitignore/.ragignore фильтрация, CLI (list, remove, прогресс), OpenAI embedder
+5. **Рефакторинг экстракторов** — ts-extractor, extractor-types, languages с graceful degradation
+6. **Java tree-sitter** — java-extractor с FQN, Javadoc, аннотациями
+7. **Kotlin tree-sitter** — kotlin-extractor с extension functions, companion objects
+8. **Config path resolution** — --config, RAG_CONFIG, resolveConfigPath
+9. **Export/Import/Re-embed** — backup/restore, перенос данных, перегенерация эмбеддингов
 
 ## MCP Servers
 
