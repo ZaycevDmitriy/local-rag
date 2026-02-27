@@ -98,6 +98,18 @@ HNSW-индекс на `embedding`, GIN-индекс на `search_vector`. Ра�
 3. **Код** — tree-sitter chunker (TS/JS), fallback chunker, Git-источники
 4. **Полировка** — .gitignore/.ragignore фильтрация, CLI (list, remove, прогресс), OpenAI embedder
 
-## MCP
+## MCP Servers
 
-Always use Context7 MCP when I need library/API documentation, code generation, setup or configuration steps without me having to explicitly ask.
+### Context7
+
+Используй Context7 MCP (`mcp__context7__resolve-library-id` → `mcp__context7__query-docs`) когда нужна документация по библиотекам/API, примеры кода, инструкции по настройке — без явного запроса от пользователя.
+
+### local-rag
+
+Используй local-rag MCP (`mcp__local-rag__search`, `mcp__local-rag__read_source`, `mcp__local-rag__list_sources`, `mcp__local-rag__status`) для поиска по проиндексированным кодовым базам и документации.
+
+**Важно: запросы к local-rag формулируй на английском языке.** BM25 + vector search работают лучше с английскими запросами. Даже если пользователь задаёт вопрос на русском — переведи суть запроса на английский перед вызовом `mcp__local-rag__search`.
+
+Пример:
+- Пользователь: «Как работает авторизация в KariPos?»
+- Запрос к local-rag: `query: "authentication authorization login flow"`

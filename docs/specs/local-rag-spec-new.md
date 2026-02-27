@@ -783,3 +783,67 @@ interface Chunker {
 15. .gitignore + .ragignore фильтрация
 16. CLI: `rag list`, `rag remove`, прогресс
 17. OpenAI embedder (альтернативный провайдер)
+
+---
+
+## 15. Использование как глобальный MCP-сервер (Claude Code)
+
+### 15.1. Проблема: CWD-зависимый поиск конфига
+
+При запуске local-rag как **глобального** MCP-сервера (запись в `~/.claude.json` вместо `.mcp.json`
+проекта) возникает проблема: `mcp-entry.ts` вызывает `loadConfig()` без аргументов, и поиск
+конфига начинается с `./rag.config.yaml` — относительно **текущей рабочей директории** процесса.
+
+При локальном использовании CWD совпадал с директорией проекта `local-rag`, где и лежит
+`rag.config.yaml`. При глобальном запуске Claude Code устанавливает CWD произвольно (текущий
+проект пользователя), файл не найден, сервер падает:
+
+```
+MCP server startup error: Jina embeddings config is required when provider is "jina"
+```
+
+Ошибка вводит в заблуждение: она сообщает о провале валидации конфига (дефолты не содержат
+настройки Jina), а не об отсутствии файла конфига.
+
+### 15.2. Текущее решение (обходной путь)
+
+Скопировать `rag.config.yaml` в глобальный путь, который ищется третьим в порядке поиска:
+
+```bash
+mkdir -p ~/.config/rag
+cp /path/to/local-rag/rag.config.yaml ~/.config/rag/config.yaml
+```
+
+Этот путь (`~/.config/rag/config.yaml`) корректно находится независимо от CWD.
+
+**Недостатки обходного пути:**
+- При изменении `rag.config.yaml` нужно помнить о ручном копировании
+- Два файла конфига расходятся со временем
+- Неочевидно для нового пользователя
+
+### 15.3. Правильное решение (планируется)
+
+Подробная спецификация изменений в коде: [docs/specs/config-path-resolution.md](docs/specs/config-path-resolution.md).
+
+Краткое резюме: добавить поддержку флага `--config <path>` в `mcp-entry.ts` и переменной
+окружения `RAG_CONFIG`. Это позволит явно указать путь к конфигу при регистрации сервера.
+
+После реализации конфигурация в `~/.claude.json` будет выглядеть так:
+
+```json
+{
+  "mcpServers": {
+    "local-rag": {
+      "type": "stdio",
+      "command": "node",
+      "args": [
+        "/abs/path/to/local-rag/dist/mcp-entry.js",
+        "--config", "/abs/path/to/rag.config.yaml"
+      ],
+      "env": {
+        "JINA_API_KEY": "your-key"
+      }
+    }
+  }
+}
+```
