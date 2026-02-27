@@ -2,6 +2,7 @@
 import { Command } from 'commander';
 import { loadConfig } from '../config/index.js';
 import { createDb, closeDb, getAppliedMigrations } from '../storage/index.js';
+import { isTreeSitterSupported } from '../chunks/code/languages.js';
 
 export const statusCommand = new Command('status')
   .description('Show system status')
@@ -43,6 +44,12 @@ export const statusCommand = new Command('status')
         console.log(`Провайдер реранкера:   ${config.reranker.provider}`);
         console.log('');
         console.log(`Миграции: ${migrations.length > 0 ? migrations.join(', ') : 'не применены'}`);
+        console.log('');
+        console.log('Tree-sitter languages:');
+        console.log('  TypeScript/TSX:  active');
+        console.log('  JavaScript/JSX:  active');
+        console.log(`  Java:            ${isTreeSitterSupported('Test.java') ? 'active' : 'fallback'}`);
+        console.log(`  Kotlin:          ${isTreeSitterSupported('Test.kt') ? 'active' : 'fallback'}`);
       } finally {
         await closeDb(sql);
       }

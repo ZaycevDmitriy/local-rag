@@ -42,6 +42,7 @@
     "vitest": "^4.0.18"
   },
   "optionalDependencies": {
-    "tree-sitter-java": "^0.23.5"
+    "tree-sitter-java": "^0.23.5",
+    "tree-sitter-kotlin": "^0.3.8"
   }
 }

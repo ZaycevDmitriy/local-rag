@@ -4,6 +4,7 @@ import type { Chunk, ChunkMetadata, ChunkSizeConfig, Chunker, FileContent } from
 import { getLanguageForFile, isTreeSitterSupported } from './languages.js';
 import { extractNodes as extractTsNodes } from './ts-extractor.js';
 import { extractNodes as extractJavaNodes } from './java-extractor.js';
+import { extractNodes as extractKotlinNodes } from './kotlin-extractor.js';
 import type { ExtractedNode, ExtractorFn } from './extractor-types.js';
 
 const require = createRequire(import.meta.url);
@@ -22,8 +23,7 @@ function getExtractor(langName: string): ExtractorFn {
   case 'java':
     return extractJavaNodes;
   case 'kotlin':
-    // Заглушка — реализация в фазе 7.
-    return () => [];
+    return extractKotlinNodes;
   default:
     return () => [];
   }

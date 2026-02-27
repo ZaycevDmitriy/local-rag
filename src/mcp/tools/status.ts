@@ -2,6 +2,7 @@
 import type postgres from 'postgres';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { AppConfig } from '../../config/schema.js';
+import { isTreeSitterSupported } from '../../chunks/code/languages.js';
 
 // Регистрирует инструмент status на MCP-сервере.
 export function registerStatusTool(
@@ -47,6 +48,12 @@ export function registerStatusTool(
             vectorWeight: config.search.vectorWeight,
             finalTopK: config.search.finalTopK,
             retrieveTopK: config.search.retrieveTopK,
+          },
+          treeSitterLanguages: {
+            typescript: 'active',
+            javascript: 'active',
+            java: isTreeSitterSupported('Test.java') ? 'active' : 'fallback',
+            kotlin: isTreeSitterSupported('Test.kt') ? 'active' : 'fallback',
           },
         };
 
