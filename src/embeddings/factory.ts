@@ -1,7 +1,6 @@
 import type { EmbeddingsConfig } from '../config/schema.js';
 import type { TextEmbedder } from './types.js';
 import { JinaTextEmbedder } from './jina.js';
-import { MockTextEmbedder } from './mock.js';
 import { OpenAITextEmbedder } from './openai.js';
 
 // Создание экземпляра TextEmbedder по конфигурации.
@@ -17,8 +16,6 @@ export function createTextEmbedder(config: EmbeddingsConfig): TextEmbedder {
       dimensions: config.jina.dimensions,
     });
   }
-  case 'mock':
-    return new MockTextEmbedder();
   case 'openai': {
     if (!config.openai) {
       throw new Error('OpenAI embeddings config is required when provider is "openai"');

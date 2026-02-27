@@ -11,12 +11,26 @@ export function registerListSourcesTool(server: McpServer, sourceStorage: Source
       description: 'List all indexed sources with their metadata (name, type, path, chunk count, last indexed time).',
       inputSchema: {
         limit: z.number().int().min(1).max(100).optional().describe('Maximum number of sources to return'),
+        sourceType: z.string().optional().describe('Filter by source type (local/git)'),
+        pathPrefix: z.string().optional().describe('Filter by path prefix'),
       },
     },
     async (args) => {
       try {
         const sources = await sourceStorage.getAll();
-        const limited = args.limit ? sources.slice(0, args.limit) : sources;
+
+        // Фильтрация по типу и префиксу пути.
+        const filtered = sources.filter((s) => {
+          if (args.sourceType && s.type !== args.sourceType) {
+            return false;
+          }
+          if (args.pathPrefix && !s.path?.startsWith(args.pathPrefix)) {
+            return false;
+          }
+          return true;
+        });
+
+        const limited = args.limit ? filtered.slice(0, args.limit) : filtered;
 
         const result = limited.map((s) => ({
           id: s.id,
@@ -25,7 +39,6 @@ export function registerListSourcesTool(server: McpServer, sourceStorage: Source
           path: s.path,
           chunkCount: s.chunk_count,
           lastIndexedAt: s.last_indexed_at?.toISOString() ?? null,
-          createdAt: s.created_at.toISOString(),
         }));
 
         return {

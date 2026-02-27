@@ -12,8 +12,10 @@ export function registerSearchTool(server: McpServer, coordinator: SearchCoordin
         'Combines BM25 full-text search with vector similarity and optional reranking.',
       inputSchema: {
         query: z.string().describe('Search query'),
-        topK: z.number().int().min(1).max(50).optional().describe('Number of results to return (default: 10)'),
+        topK: z.number().int().min(1).max(100).optional().describe('Number of results to return (default: 10)'),
         sourceId: z.string().uuid().optional().describe('Filter by source ID'),
+        sourceType: z.enum(['code', 'markdown', 'text', 'pdf']).optional().describe('Filter by source type'),
+        pathPrefix: z.string().optional().describe('Filter by file path prefix'),
       },
     },
     async (args) => {
@@ -22,6 +24,8 @@ export function registerSearchTool(server: McpServer, coordinator: SearchCoordin
           query: args.query,
           topK: args.topK,
           sourceId: args.sourceId,
+          sourceType: args.sourceType,
+          pathPrefix: args.pathPrefix,
         });
 
         return {

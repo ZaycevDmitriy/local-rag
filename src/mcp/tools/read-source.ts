@@ -20,6 +20,7 @@ export function registerReadSourceTool(
         chunkId: z.string().uuid().optional().describe('Chunk ID to read context for'),
         sourceName: z.string().optional().describe('Source name (used with path)'),
         path: z.string().optional().describe('Relative file path within the source'),
+        headerPath: z.string().optional().describe('Header path within the file (for markdown sections)'),
         startLine: z.number().int().min(1).optional().describe('Start line (1-based)'),
         endLine: z.number().int().min(1).optional().describe('End line (1-based, inclusive)'),
         context: z.number().int().min(0).max(50).optional().describe('Extra lines to include before and after (default: 0)'),
@@ -29,6 +30,16 @@ export function registerReadSourceTool(
       try {
         if (args.chunkId) {
           return await readByChunkId(args.chunkId, args.context ?? 0, chunkStorage, sourceStorage);
+        }
+
+        if (args.sourceName && args.path && args.headerPath) {
+          return await readByHeaderPath(
+            args.sourceName,
+            args.path,
+            args.headerPath,
+            chunkStorage,
+            sourceStorage,
+          );
         }
 
         if (args.sourceName && args.path) {
@@ -85,7 +96,19 @@ async function readByChunkId(
     return {
       content: [{
         type: 'text' as const,
-        text: chunk.content,
+        text: JSON.stringify({
+          content: chunk.content,
+          path: metadata.path ?? null,
+          sourceType: metadata.sourceType ?? 'text',
+          metadata: {
+            startLine: metadata.startLine,
+            endLine: metadata.endLine,
+            fqn: metadata.fqn,
+            fragmentType: metadata.fragmentType,
+            headerPath: metadata.headerPath,
+            language: metadata.language,
+          },
+        }, null, 2),
       }],
     };
   }
@@ -96,7 +119,15 @@ async function readByChunkId(
 
   if (!path) {
     return {
-      content: [{ type: 'text' as const, text: chunk.content }],
+      content: [{
+        type: 'text' as const,
+        text: JSON.stringify({
+          content: chunk.content,
+          path: null,
+          sourceType: metadata.sourceType ?? 'text',
+          metadata: {},
+        }, null, 2),
+      }],
     };
   }
 
@@ -106,6 +137,61 @@ async function readByChunkId(
     startLine,
     endLine,
     context,
+    metadata,
+  );
+}
+
+// Читает фрагмент файла по headerPath.
+async function readByHeaderPath(
+  sourceName: string,
+  path: string,
+  headerPath: string,
+  chunkStorage: ChunkStorage,
+  sourceStorage: SourceStorage,
+): Promise<{ content: Array<{ type: 'text'; text: string }>; isError?: boolean }> {
+  const source = await sourceStorage.getByName(sourceName);
+  if (!source) {
+    return {
+      content: [{ type: 'text' as const, text: `Source "${sourceName}" not found` }],
+      isError: true,
+    };
+  }
+
+  const chunk = await chunkStorage.findByHeaderPath(source.id, path, headerPath);
+  if (!chunk) {
+    return {
+      content: [{ type: 'text' as const, text: `No chunk found for headerPath "${headerPath}" in ${path}` }],
+      isError: true,
+    };
+  }
+
+  const metadata = chunk.metadata as Record<string, unknown>;
+
+  if (!source.path) {
+    return {
+      content: [{
+        type: 'text' as const,
+        text: JSON.stringify({
+          content: chunk.content,
+          path,
+          sourceType: metadata.sourceType ?? 'text',
+          metadata: {
+            startLine: metadata.startLine,
+            endLine: metadata.endLine,
+            headerPath: metadata.headerPath,
+          },
+        }, null, 2),
+      }],
+    };
+  }
+
+  return await readFileFragment(
+    source.path,
+    path,
+    metadata.startLine as number | undefined,
+    metadata.endLine as number | undefined,
+    0,
+    metadata,
   );
 }
 
@@ -133,16 +219,17 @@ async function readByCoordinates(
     };
   }
 
-  return await readFileFragment(source.path, path, startLine, endLine, context);
+  return await readFileFragment(source.path, path, startLine, endLine, context, {});
 }
 
-// Читает фрагмент файла с учётом контекста.
+// Читает фрагмент файла с учётом контекста. Возвращает структурированный ответ.
 async function readFileFragment(
   basePath: string,
   relativePath: string,
   startLine: number | undefined,
   endLine: number | undefined,
   context: number,
+  metadata: Record<string, unknown>,
 ): Promise<{ content: Array<{ type: 'text'; text: string }>; isError?: boolean }> {
   const { join } = await import('node:path');
   const absolutePath = join(basePath, relativePath);
@@ -160,26 +247,38 @@ async function readFileFragment(
   const lines = fileContent.split('\n');
   const totalLines = lines.length;
 
+  let fragmentContent: string;
+  let actualStart: number | undefined;
+  let actualEnd: number | undefined;
+
   if (startLine === undefined && endLine === undefined) {
     // Возвращаем весь файл.
-    return {
-      content: [{
-        type: 'text' as const,
-        text: `// ${relativePath}\n${fileContent}`,
-      }],
-    };
+    fragmentContent = fileContent;
+  } else {
+    // Применяем контекст и ограничиваем диапазон.
+    actualStart = Math.max(1, (startLine ?? 1) - context);
+    actualEnd = Math.min(totalLines, (endLine ?? startLine ?? totalLines) + context);
+    fragmentContent = lines.slice(actualStart - 1, actualEnd).join('\n');
   }
 
-  // Применяем контекст и ограничиваем диапазон.
-  const start = Math.max(1, (startLine ?? 1) - context);
-  const end = Math.min(totalLines, (endLine ?? startLine ?? totalLines) + context);
-
-  const fragment = lines.slice(start - 1, end).join('\n');
+  const result = {
+    content: fragmentContent,
+    path: relativePath,
+    sourceType: (metadata.sourceType as string | undefined) ?? 'text',
+    metadata: {
+      startLine: actualStart,
+      endLine: actualEnd,
+      fqn: metadata.fqn as string | undefined,
+      fragmentType: metadata.fragmentType as string | undefined,
+      headerPath: metadata.headerPath as string | undefined,
+      language: metadata.language as string | undefined,
+    },
+  };
 
   return {
     content: [{
       type: 'text' as const,
-      text: `// ${relativePath}:${start}-${end}\n${fragment}`,
+      text: JSON.stringify(result, null, 2),
     }],
   };
 }

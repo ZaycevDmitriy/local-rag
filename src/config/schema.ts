@@ -25,7 +25,7 @@ export const OpenAIEmbeddingsSchema = z.object({
 
 // Схема конфигурации эмбеддингов.
 export const EmbeddingsConfigSchema = z.object({
-  provider: z.enum(['jina', 'openai', 'self-hosted', 'mock']).default('jina'),
+  provider: z.enum(['jina', 'openai', 'self-hosted']).default('jina'),
   jina: JinaEmbeddingsSchema.optional(),
   openai: OpenAIEmbeddingsSchema.optional(),
 });

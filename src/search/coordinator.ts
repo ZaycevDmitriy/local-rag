@@ -31,11 +31,15 @@ export class SearchCoordinator {
         query.query,
         this.searchConfig.retrieveTopK,
         query.sourceId,
+        query.sourceType,
+        query.pathPrefix,
       ),
       this.chunkStorage.searchVector(
         queryEmbedding,
         this.searchConfig.retrieveTopK,
         query.sourceId,
+        query.sourceType,
+        query.pathPrefix,
       ),
     ]);
 

@@ -73,22 +73,16 @@ export class ChunkStorage {
     query: string,
     limit: number,
     sourceId?: string,
+    sourceType?: string,
+    pathPrefix?: string,
   ): Promise<Array<{ id: string; score: number }>> {
-    if (sourceId) {
-      return await this.sql<Array<{ id: string; score: number }>>`
-        SELECT id, ts_rank_cd(search_vector, query) AS score
-        FROM chunks, plainto_tsquery('simple', ${query}) query
-        WHERE search_vector @@ query
-          AND source_id = ${sourceId}
-        ORDER BY score DESC
-        LIMIT ${limit}
-      `;
-    }
-
     return await this.sql<Array<{ id: string; score: number }>>`
-      SELECT id, ts_rank_cd(search_vector, query) AS score
-      FROM chunks, plainto_tsquery('simple', ${query}) query
-      WHERE search_vector @@ query
+      SELECT id, ts_rank_cd(search_vector, q) AS score
+      FROM chunks, plainto_tsquery('simple', ${query}) q
+      WHERE search_vector @@ q
+        ${sourceId ? this.sql`AND source_id = ${sourceId}` : this.sql``}
+        ${sourceType ? this.sql`AND metadata->>'sourceType' = ${sourceType}` : this.sql``}
+        ${pathPrefix ? this.sql`AND metadata->>'path' LIKE ${pathPrefix + '%'}` : this.sql``}
       ORDER BY score DESC
       LIMIT ${limit}
     `;
@@ -99,24 +93,18 @@ export class ChunkStorage {
     embedding: number[],
     limit: number,
     sourceId?: string,
+    sourceType?: string,
+    pathPrefix?: string,
   ): Promise<Array<{ id: string; score: number }>> {
     const vectorStr = pgvector.toSql(embedding) as string;
-
-    if (sourceId) {
-      return await this.sql<Array<{ id: string; score: number }>>`
-        SELECT id, 1 - (embedding <=> ${vectorStr}::vector) AS score
-        FROM chunks
-        WHERE embedding IS NOT NULL
-          AND source_id = ${sourceId}
-        ORDER BY embedding <=> ${vectorStr}::vector
-        LIMIT ${limit}
-      `;
-    }
 
     return await this.sql<Array<{ id: string; score: number }>>`
       SELECT id, 1 - (embedding <=> ${vectorStr}::vector) AS score
       FROM chunks
       WHERE embedding IS NOT NULL
+        ${sourceId ? this.sql`AND source_id = ${sourceId}` : this.sql``}
+        ${sourceType ? this.sql`AND metadata->>'sourceType' = ${sourceType}` : this.sql``}
+        ${pathPrefix ? this.sql`AND metadata->>'path' LIKE ${pathPrefix + '%'}` : this.sql``}
       ORDER BY embedding <=> ${vectorStr}::vector
       LIMIT ${limit}
     `;
@@ -129,6 +117,23 @@ export class ChunkStorage {
     `;
 
     return parseInt(result[0]!.count, 10);
+  }
+
+  // Находит чанк по пути файла и headerPath внутри источника.
+  async findByHeaderPath(
+    sourceId: string,
+    path: string,
+    headerPath: string,
+  ): Promise<ChunkRow | null> {
+    const rows = await this.sql<ChunkRow[]>`
+      SELECT * FROM chunks
+      WHERE source_id = ${sourceId}
+        AND metadata->>'path' = ${path}
+        AND metadata->>'headerPath' = ${headerPath}
+      LIMIT 1
+    `;
+
+    return rows[0] ?? null;
   }
 
   // Возвращает чанки по массиву ID в порядке переданных ID.

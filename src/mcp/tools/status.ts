@@ -3,6 +3,7 @@ import type postgres from 'postgres';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { AppConfig } from '../../config/schema.js';
 import { isTreeSitterSupported } from '../../chunks/code/languages.js';
+import { getAppliedMigrations } from '../../storage/index.js';
 
 // Регистрирует инструмент status на MCP-сервере.
 export function registerStatusTool(
@@ -20,28 +21,40 @@ export function registerStatusTool(
     async () => {
       try {
         // Проверяем подключение к БД и получаем статистику.
-        const [sourcesResult, chunksResult] = await Promise.all([
+        const [sourcesResult, chunksResult, lastIndexedResult, appliedMigrations] = await Promise.all([
           sql<Array<{ count: string }>>`SELECT COUNT(*)::text AS count FROM sources`,
           sql<Array<{ count: string }>>`SELECT COUNT(*)::text AS count FROM chunks`,
+          sql<Array<{ last_indexed_at: Date | null }>>`
+            SELECT MAX(last_indexed_at) AS last_indexed_at FROM sources
+          `,
+          getAppliedMigrations(sql),
         ]);
 
         const sourceCount = parseInt(sourcesResult[0]!.count, 10);
         const chunkCount = parseInt(chunksResult[0]!.count, 10);
+        const lastIndexedAt = lastIndexedResult[0]?.last_indexed_at;
+        const schemaVersion = appliedMigrations.at(-1) ?? null;
 
         const status = {
           database: {
             connected: true,
-            host: config.database.host,
-            port: config.database.port,
-            name: config.database.name,
-          },
-          stats: {
-            sources: sourceCount,
-            chunks: chunkCount,
+            schemaVersion,
+            totalSources: sourceCount,
+            totalChunks: chunkCount,
           },
           providers: {
-            embeddings: config.embeddings.provider,
-            reranker: config.reranker.provider,
+            embeddings: {
+              provider: config.embeddings.provider,
+              configured: true,
+            },
+            reranker: {
+              provider: config.reranker.provider,
+              configured: true,
+            },
+          },
+          indexing: {
+            active: false,
+            lastIndexedAt: lastIndexedAt?.toISOString() ?? null,
           },
           search: {
             bm25Weight: config.search.bm25Weight,
