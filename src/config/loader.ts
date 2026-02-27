@@ -96,7 +96,7 @@ async function fileExists(filePath: string): Promise<boolean> {
  * 2. ./rag.config.yaml (текущая директория).
  * 3. ~/.config/rag/config.yaml (домашняя директория).
  */
-async function resolveConfigPath(configPath?: string): Promise<string | null> {
+export async function resolveConfigPath(configPath?: string): Promise<string | null> {
   if (configPath) {
     const resolved = resolve(configPath);
     if (await fileExists(resolved)) {

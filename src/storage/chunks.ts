@@ -160,4 +160,46 @@ export class ChunkStorage {
 
     return result;
   }
+
+  // Возвращает чанки для перегенерации эмбеддингов.
+  // force=false → только с NULL embedding, force=true → все.
+  async getChunksForReEmbed(options: {
+    sourceId?: string;
+    force: boolean;
+    limit: number;
+    offset: number;
+  }): Promise<ChunkRow[]> {
+    const { sourceId, force, limit, offset } = options;
+
+    return await this.sql<ChunkRow[]>`
+      SELECT * FROM chunks
+      WHERE TRUE
+        ${!force ? this.sql`AND embedding IS NULL` : this.sql``}
+        ${sourceId ? this.sql`AND source_id = ${sourceId}` : this.sql``}
+      ORDER BY created_at
+      LIMIT ${limit}
+      OFFSET ${offset}
+    `;
+  }
+
+  // Обновляет эмбеддинг одного чанка.
+  async updateEmbedding(chunkId: string, embedding: number[]): Promise<void> {
+    const vectorStr = pgvector.toSql(embedding) as string;
+
+    await this.sql`
+      UPDATE chunks SET embedding = ${vectorStr}::vector WHERE id = ${chunkId}
+    `;
+  }
+
+  // Подсчёт чанков для re-embed.
+  async countForReEmbed(sourceId?: string, force?: boolean): Promise<number> {
+    const result = await this.sql<Array<{ count: string }>>`
+      SELECT COUNT(*)::text AS count FROM chunks
+      WHERE TRUE
+        ${!force ? this.sql`AND embedding IS NULL` : this.sql``}
+        ${sourceId ? this.sql`AND source_id = ${sourceId}` : this.sql``}
+    `;
+
+    return parseInt(result[0]!.count, 10);
+  }
 }

@@ -29,4 +29,4 @@ export type {
 
 export { defaultConfig } from './defaults.js';
 
-export { loadConfig, resolveEnvVars, deepMerge } from './loader.js';
+export { loadConfig, resolveEnvVars, deepMerge, resolveConfigPath } from './loader.js';
