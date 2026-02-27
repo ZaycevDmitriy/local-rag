@@ -57,9 +57,15 @@ export function escapeValue(value: unknown): string {
     return `'${json.replace(/'/g, '\'\'')}'::jsonb`;
   }
 
-  // Строка — экранируем одинарные кавычки.
+  // Строка — экранируем спецсимволы для однострочного SQL (E-string синтаксис PostgreSQL).
   const str = String(value);
-  return `'${str.replace(/'/g, '\'\'')}'`;
+  const escaped = str
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, '\'\'')
+    .replace(/\n/g, '\\n')
+    .replace(/\r/g, '\\r')
+    .replace(/\t/g, '\\t');
+  return `E'${escaped}'`;
 }
 
 // Генерирует INSERT-стейтмент для одной строки.

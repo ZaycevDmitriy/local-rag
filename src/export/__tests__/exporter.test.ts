@@ -22,16 +22,24 @@ describe('exporter', () => {
       expect(escapeValue(false)).toBe('FALSE');
     });
 
-    it('строка', () => {
-      expect(escapeValue('hello')).toBe('\'hello\'');
+    it('строка → E-string', () => {
+      expect(escapeValue('hello')).toBe('E\'hello\'');
     });
 
     it('строка с одинарными кавычками', () => {
-      expect(escapeValue('it\'s a test')).toBe('\'it\'\'s a test\'');
+      expect(escapeValue('it\'s a test')).toBe('E\'it\'\'s a test\'');
     });
 
-    it('строка с переносами строк', () => {
-      expect(escapeValue('line1\nline2')).toBe('\'line1\nline2\'');
+    it('строка с переносами строк → экранирует \\n', () => {
+      expect(escapeValue('line1\nline2')).toBe('E\'line1\\nline2\'');
+    });
+
+    it('строка с обратными слэшами → экранирует \\\\', () => {
+      expect(escapeValue('path\\to\\file')).toBe('E\'path\\\\to\\\\file\'');
+    });
+
+    it('строка с табуляцией → экранирует \\t', () => {
+      expect(escapeValue('col1\tcol2')).toBe('E\'col1\\tcol2\'');
     });
 
     it('Date', () => {
@@ -67,7 +75,7 @@ describe('exporter', () => {
         type: 'local',
       });
       expect(sql).toBe(
-        'INSERT INTO sources (id, name, type) VALUES (\'abc-123\', \'test\', \'local\');',
+        'INSERT INTO sources (id, name, type) VALUES (E\'abc-123\', E\'test\', E\'local\');',
       );
     });
 
@@ -78,7 +86,7 @@ describe('exporter', () => {
         chunk_count: 100,
       });
       expect(sql).toBe(
-        'INSERT INTO sources (id, path, chunk_count) VALUES (\'abc\', NULL, 100);',
+        'INSERT INTO sources (id, path, chunk_count) VALUES (E\'abc\', NULL, 100);',
       );
     });
 

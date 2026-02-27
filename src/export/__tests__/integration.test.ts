@@ -123,22 +123,22 @@ describe('export/import integration', () => {
   });
 
   describe('escapeValue — спецсимволы', () => {
-    it('контент с переносами строк', () => {
+    it('контент с переносами строк → E-string с \\n', () => {
       const value = 'line1\nline2\nline3';
       const escaped = escapeValue(value);
-      expect(escaped).toBe('\'line1\nline2\nline3\'');
+      expect(escaped).toBe('E\'line1\\nline2\\nline3\'');
     });
 
     it('контент с одинарными кавычками', () => {
       const value = 'it\'s a "test"';
       const escaped = escapeValue(value);
-      expect(escaped).toBe('\'it\'\'s a "test"\'');
+      expect(escaped).toBe('E\'it\'\'s a "test"\'');
     });
 
     it('контент с обратными слэшами', () => {
       const value = 'path\\to\\file';
       const escaped = escapeValue(value);
-      expect(escaped).toBe('\'path\\to\\file\'');
+      expect(escaped).toBe('E\'path\\\\to\\\\file\'');
     });
 
     it('JSON metadata с вложенными объектами', () => {
