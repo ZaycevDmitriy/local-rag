@@ -9,3 +9,6 @@ dist
 *.pem
 .DS_Store
 .worktrees
+
+# Локальная конфигурация (содержит личные пути и источники данных)
+rag.config.yaml
