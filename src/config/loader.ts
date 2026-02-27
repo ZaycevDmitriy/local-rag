@@ -91,7 +91,8 @@ async function fileExists(filePath: string): Promise<boolean> {
 /**
  * Определяет путь к конфиг-файлу.
  * Порядок поиска:
- * 1. Переданный configPath (если указан).
+ * 0. Переданный configPath (--config). При отсутствии файла — throw Error.
+ * 1. RAG_CONFIG env var. При отсутствии файла — throw Error.
  * 2. ./rag.config.yaml (текущая директория).
  * 3. ~/.config/rag/config.yaml (домашняя директория).
  */
@@ -101,7 +102,17 @@ async function resolveConfigPath(configPath?: string): Promise<string | null> {
     if (await fileExists(resolved)) {
       return resolved;
     }
-    return null;
+    throw new Error(`Config file not found at path: ${resolved}`);
+  }
+
+  // Шаг 1: переменная окружения RAG_CONFIG.
+  const envConfigPath = process.env['RAG_CONFIG'];
+  if (envConfigPath) {
+    const resolved = resolve(envConfigPath);
+    if (await fileExists(resolved)) {
+      return resolved;
+    }
+    throw new Error(`Config file not found at RAG_CONFIG path: ${resolved}`);
   }
 
   // Поиск в текущей директории.

@@ -266,14 +266,9 @@ describe('loadConfig', () => {
     expect(config.indexing.chunkSize.maxTokens).toBe(1000);
   });
 
-  it('возвращает дефолтный конфиг, если файл не найден', async () => {
-    const config = await loadConfig(join(TEST_DIR, 'nonexistent.yaml'));
-
-    // Должен вернуть дефолтный конфиг через fallback поведение.
-    // loadConfig с несуществующим явным путём вернёт null из resolveConfigPath.
-    // Значит loadConfig вернёт дефолт.
-    expect(config.database.host).toBe('localhost');
-    expect(config.database.port).toBe(5432);
+  it('выбрасывает ошибку, если явный configPath не найден', async () => {
+    await expect(loadConfig(join(TEST_DIR, 'nonexistent.yaml')))
+      .rejects.toThrow('Config file not found at path:');
   });
 
   it('выбрасывает ошибку при невалидном конфиге', async () => {
@@ -336,5 +331,78 @@ describe('loadConfig', () => {
     expect(config.search.retrieveTopK).toBe(100);
     expect(config.search.finalTopK).toBe(20);
     expect(config.search.rrf.k).toBe(80);
+  });
+});
+
+// --- RAG_CONFIG env var ---
+
+describe('RAG_CONFIG env var', () => {
+  const originalEnv = process.env['RAG_CONFIG'];
+
+  afterEach(() => {
+    if (originalEnv === undefined) {
+      delete process.env['RAG_CONFIG'];
+    } else {
+      process.env['RAG_CONFIG'] = originalEnv;
+    }
+  });
+
+  it('загружает конфиг из пути, указанного в RAG_CONFIG', async () => {
+    const configData = {
+      database: {
+        host: 'env-host',
+        port: 5555,
+      },
+    };
+    const configPath = join(TEST_DIR, 'env-rag-config.yaml');
+    await writeFile(configPath, stringifyYaml(configData));
+
+    process.env['RAG_CONFIG'] = configPath;
+
+    const config = await loadConfig();
+
+    expect(config.database.host).toBe('env-host');
+    expect(config.database.port).toBe(5555);
+  });
+
+  it('выбрасывает ошибку, если RAG_CONFIG указывает на несуществующий файл', async () => {
+    process.env['RAG_CONFIG'] = join(TEST_DIR, 'missing-env-config.yaml');
+
+    await expect(loadConfig())
+      .rejects.toThrow('Config file not found at RAG_CONFIG path:');
+  });
+
+  it('не выбрасывает ошибку при отсутствии RAG_CONFIG, использует fallback', async () => {
+    delete process.env['RAG_CONFIG'];
+
+    // Без RAG_CONFIG loadConfig() должен использовать обычный fallback (CWD/global/дефолты).
+    // Проверяем что ошибка не выбрасывается и возвращается валидный конфиг.
+    await expect(loadConfig()).resolves.toBeDefined();
+  });
+
+  it('RAG_CONFIG имеет приоритет над CWD', async () => {
+    // Создаём два файла: один с host='cwd-host' в TEST_DIR, другой с host='env-host'.
+    const cwdConfig = { database: { host: 'cwd-host' } };
+    const envConfig = { database: { host: 'env-host' } };
+
+    const cwdConfigPath = join(TEST_DIR, 'rag.config.yaml');
+    const envConfigPath = join(TEST_DIR, 'env-override.yaml');
+
+    await writeFile(cwdConfigPath, stringifyYaml(cwdConfig));
+    await writeFile(envConfigPath, stringifyYaml(envConfig));
+
+    process.env['RAG_CONFIG'] = envConfigPath;
+
+    // Меняем CWD на TEST_DIR, чтобы rag.config.yaml из CWD был доступен.
+    const originalCwd = process.cwd();
+    process.chdir(TEST_DIR);
+
+    try {
+      const config = await loadConfig();
+      // Должен загрузиться конфиг из RAG_CONFIG, не из CWD.
+      expect(config.database.host).toBe('env-host');
+    } finally {
+      process.chdir(originalCwd);
+    }
   });
 });
