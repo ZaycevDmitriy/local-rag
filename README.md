@@ -228,10 +228,10 @@ dist/
 
 | Инструмент | Описание |
 |------------|----------|
-| `search` | Гибридный семантический поиск. Параметры: `query` (строка), `topK` (1-50, по умолчанию 10), `sourceId` (UUID, опционально) |
-| `read_source` | Чтение содержимого проиндексированного источника |
-| `list_sources` | Список всех проиндексированных источников |
-| `status` | Статус системы: БД, провайдеры, количество чанков |
+| `search` | Гибридный семантический поиск. Параметры: `query`, `topK` (1-100, по умолчанию 10), `sourceId`, `sourceType` (code/markdown/text/pdf), `pathPrefix` |
+| `read_source` | Чтение фрагмента источника по `chunkId`, по координатам (`sourceName` + `path` + `startLine`/`endLine`) или по заголовку (`headerPath`). Возвращает структурированный JSON |
+| `list_sources` | Список проиндексированных источников. Фильтры: `sourceType` (local/git), `pathPrefix`, `limit` |
+| `status` | Статус системы: `schemaVersion`, `totalSources`/`totalChunks`, провайдеры, `lastIndexedAt` |
 
 ## Архитектура
 
@@ -267,6 +267,7 @@ Query -> embed -> parallel [BM25 (tsvector, top 50), Vector (pgvector cosine, to
 | Тип файла | Стратегия | Детали |
 |-----------|-----------|--------|
 | `.ts`, `.tsx`, `.js`, `.jsx` | tree-sitter | AST-парсинг: функции, классы, методы, интерфейсы |
+| `.java`, `.kt` | tree-sitter | AST-парсинг: классы, методы, FQN с пакетом; graceful degradation если грамматика не установлена |
 | `.py`, `.go`, `.rs` и др. | Fallback | Разбиение по пустым строкам + отслеживание строк |
 | `.md`, `.mdx` | Markdown | Разбиение по заголовкам с сохранением иерархии |
 | Остальные | Fixed-size | Фиксированные блоки по токенам с перекрытием |
@@ -283,7 +284,7 @@ Query -> embed -> parallel [BM25 (tsvector, top 50), Vector (pgvector cosine, to
 | MCP | @modelcontextprotocol/sdk (stdio) |
 | CLI | Commander |
 | Конфиг | YAML + Zod-валидация |
-| Тесты | Vitest (178 тестов) |
+| Тесты | Vitest (284 тестов) |
 
 ## Разработка
 
