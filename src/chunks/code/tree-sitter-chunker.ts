@@ -36,11 +36,14 @@ export class TreeSitterChunker implements Chunker {
     }
 
     // Создаём парсер и разбираем файл.
+    // bufferSize: буфер tree-sitter должен быть минимум 2x размера контента,
+    // иначе для крупных файлов (>16KB сложной вложенности) возникает EINVAL.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const Parser = require('tree-sitter') as any;
     const parser = new Parser();
     parser.setLanguage(langInfo.language);
-    const tree = parser.parse(file.content);
+    const bufferSize = Math.max(file.content.length * 2, 65536);
+    const tree = parser.parse(file.content, null, { bufferSize });
 
     // Извлекаем семантические узлы.
     const extractedNodes = extractNodes(tree.rootNode);

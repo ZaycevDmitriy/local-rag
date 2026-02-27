@@ -19,10 +19,13 @@ interface JinaEmbeddingResponse {
 const BATCH_SIZE = 64;
 
 // Максимальное количество повторных попыток.
-const MAX_RETRIES = 3;
+const MAX_RETRIES = 5;
 
-// Базовая задержка между попытками (мс).
+// Базовая задержка между попытками при 5xx (мс).
 const BASE_DELAY_MS = 1000;
+
+// Задержка при 429 Too Many Requests (мс): 60с, 120с, 240с...
+const RATE_LIMIT_DELAY_MS = 60_000;
 
 // URL Jina Embeddings API.
 const JINA_API_URL = 'https://api.jina.ai/v1/embeddings';
@@ -85,14 +88,19 @@ export class JinaTextEmbedder implements TextEmbedder {
       input,
       task,
       dimensions: this.dimensions,
+      // Автоматически обрезает тексты превышающие лимит модели.
+      truncate: true,
     });
 
     let lastError: Error | undefined;
 
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
       if (attempt > 0) {
-        // Экспоненциальная задержка: 1с, 2с, 4с.
-        const delayMs = BASE_DELAY_MS * Math.pow(2, attempt - 1);
+        // При 429 — фиксированная задержка 60с * попытка; при 5xx — экспоненциальная.
+        const delayMs = lastError?.message.includes('429')
+          ? RATE_LIMIT_DELAY_MS * attempt
+          : BASE_DELAY_MS * Math.pow(2, attempt - 1);
+        process.stderr.write(`  [jina] retry ${attempt}/${MAX_RETRIES}, wait ${Math.round(delayMs / 1000)}s\n`);
         await delay(delayMs);
       }
 
