@@ -154,6 +154,35 @@ indexing:
     cloneDir: ~/.local/share/rag/repos  # Куда клонировать Git-репозитории
 ```
 
+### Путь к конфигу
+
+Конфиг ищется в следующем порядке:
+
+| Приоритет | Источник | При отсутствии файла |
+|-----------|----------|---------------------|
+| 0 | `--config <path>` (CLI / MCP-сервер) | ошибка с указанием пути |
+| 1 | `RAG_CONFIG=<path>` (переменная окружения) | ошибка с указанием пути |
+| 2 | `./rag.config.yaml` (текущая директория) | продолжить поиск |
+| 3 | `~/.config/rag/config.yaml` | продолжить поиск |
+| — | Ничего не найдено | дефолтные значения |
+
+`RAG_CONFIG` удобен при запуске MCP-сервера как глобального инструмента, когда рабочая директория принадлежит другому проекту:
+
+```json
+{
+  "mcpServers": {
+    "local-rag": {
+      "command": "node",
+      "args": ["/absolute/path/to/local-rag/dist/mcp-entry.js"],
+      "env": {
+        "RAG_CONFIG": "/absolute/path/to/local-rag/rag.config.yaml",
+        "JINA_API_KEY": "your_key"
+      }
+    }
+  }
+}
+```
+
 ### Переменные окружения
 
 В `apiKey` поддерживается синтаксис `${ENV_VAR}` — значение берётся из переменной окружения.
@@ -190,7 +219,9 @@ dist/
 
 ### Claude Code
 
-Добавьте в `.mcp.json` проекта или глобальный `~/.claude.json`:
+Добавьте в `.mcp.json` проекта или глобальный `~/.claude.json`.
+
+Вариант с `RAG_CONFIG` (рекомендуется для глобального сервера — не зависит от рабочей директории):
 
 ```json
 {
@@ -198,6 +229,26 @@ dist/
     "local-rag": {
       "command": "node",
       "args": ["/absolute/path/to/local-rag/dist/mcp-entry.js"],
+      "env": {
+        "RAG_CONFIG": "/absolute/path/to/local-rag/rag.config.yaml",
+        "JINA_API_KEY": "your_key"
+      }
+    }
+  }
+}
+```
+
+Вариант с `--config`:
+
+```json
+{
+  "mcpServers": {
+    "local-rag": {
+      "command": "node",
+      "args": [
+        "/absolute/path/to/local-rag/dist/mcp-entry.js",
+        "--config", "/absolute/path/to/local-rag/rag.config.yaml"
+      ],
       "env": {
         "JINA_API_KEY": "your_key"
       }
@@ -217,6 +268,7 @@ dist/
       "command": "node",
       "args": ["/absolute/path/to/local-rag/dist/mcp-entry.js"],
       "env": {
+        "RAG_CONFIG": "/absolute/path/to/local-rag/rag.config.yaml",
         "JINA_API_KEY": "your_key"
       }
     }
@@ -284,7 +336,7 @@ Query -> embed -> parallel [BM25 (tsvector, top 50), Vector (pgvector cosine, to
 | MCP | @modelcontextprotocol/sdk (stdio) |
 | CLI | Commander |
 | Конфиг | YAML + Zod-валидация |
-| Тесты | Vitest (284 тестов) |
+| Тесты | Vitest (288 тестов) |
 
 ## Разработка
 
@@ -305,7 +357,7 @@ npm run typesCheck
 npm test
 
 # MCP Inspector (отладка MCP-сервера).
-npx @modelcontextprotocol/inspector node dist/mcp-entry.js
+npx @modelcontextprotocol/inspector node dist/mcp-entry.js --config ./rag.config.yaml
 ```
 
 ### Структура проекта
