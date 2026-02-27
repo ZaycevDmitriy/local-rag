@@ -77,6 +77,8 @@ export const IndexingConfigSchema = z.object({
     maxTokens: z.number().default(1000),
     overlap: z.number().default(100),
   }).default(() => ({ maxTokens: 1000, overlap: 100 })),
+  // Строгий режим: бросать ошибку если tree-sitter-грамматика не установлена.
+  strictAst: z.boolean().default(false),
 });
 
 // Корневая схема конфигурации приложения.
@@ -105,6 +107,7 @@ export const AppConfigSchema = z.object({
   indexing: IndexingConfigSchema.default(() => ({
     git: { cloneDir: '~/.local/share/rag/repos' },
     chunkSize: { maxTokens: 1000, overlap: 100 },
+    strictAst: false,
   })),
 });
 

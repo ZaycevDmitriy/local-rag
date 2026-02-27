@@ -6,6 +6,7 @@ import type { SourceConfig } from '../config/schema.js';
 import { createDb, closeDb, SourceStorage, ChunkStorage, IndexedFileStorage } from '../storage/index.js';
 import { createTextEmbedder } from '../embeddings/index.js';
 import { ChunkDispatcher, MarkdownChunker, FixedSizeChunker, TreeSitterChunker, FallbackChunker } from '../chunks/index.js';
+import { setStrictAst } from '../chunks/code/languages.js';
 import { scanLocalFiles, cloneOrPull } from '../sources/index.js';
 import { Indexer, ConsoleProgress } from '../indexer/index.js';
 
@@ -117,6 +118,7 @@ export const indexCommand = new Command('index')
   .action(async (nameArg: string | undefined, options: IndexOptions) => {
     try {
       const config = await loadConfig(options.config);
+      setStrictAst(config.indexing.strictAst);
       const sql = createDb(config.database);
 
       try {

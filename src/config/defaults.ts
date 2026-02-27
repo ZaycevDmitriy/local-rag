@@ -34,5 +34,6 @@ export const defaultConfig: AppConfig = {
       maxTokens: 1000,
       overlap: 100,
     },
+    strictAst: false,
   },
 };

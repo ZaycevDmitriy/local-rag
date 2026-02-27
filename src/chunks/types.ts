@@ -25,6 +25,10 @@ export interface ChunkMetadata {
   endOffset?: number;
   pageStart?: number;
   pageEnd?: number;
+  // Расширенный подтип фрагмента (DATA_CLASS, SEALED_CLASS, RECORD и т.д.).
+  fragmentSubtype?: string;
+  // Тип receiver для Kotlin extension functions.
+  receiverType?: string;
 }
 
 // Фрагмент документа с вектором и метаданными.

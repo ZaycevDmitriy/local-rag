@@ -1,38 +1,7 @@
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type SyntaxNode = any;
+import type { SyntaxNode, FragmentType, ExtractedNode } from './extractor-types.js';
+import { extractName, toLine } from './extractor-types.js';
 
-// Типы семантических узлов.
-export type FragmentType = 'CLASS' | 'INTERFACE' | 'FUNCTION' | 'METHOD' | 'ENUM' | 'TYPE';
-
-// Извлечённый семантический узел AST.
-export interface ExtractedNode {
-  // Тип фрагмента кода.
-  fragmentType: FragmentType;
-  // Полное квалифицированное имя (ClassName.methodName или просто name).
-  fqn: string;
-  // Начальная строка (1-based).
-  startLine: number;
-  // Конечная строка (1-based).
-  endLine: number;
-  // Текстовое содержимое узла.
-  text: string;
-}
-
-// Возвращает первое именованное дочернее поле или дочерний узел по типу.
-function getNameNode(node: SyntaxNode): SyntaxNode | null {
-  return node.childForFieldName('name') ?? null;
-}
-
-// Извлекает имя из узла объявления.
-function extractName(node: SyntaxNode): string | null {
-  const nameNode = getNameNode(node);
-  return nameNode ? nameNode.text : null;
-}
-
-// Конвертирует строку tree-sitter (0-based) в 1-based.
-function toLine(row: number): number {
-  return row + 1;
-}
+export type { FragmentType, ExtractedNode };
 
 // Рекурсивно обходит AST и собирает семантические узлы.
 export function extractNodes(rootNode: SyntaxNode): ExtractedNode[] {

@@ -2,18 +2,37 @@ import { createRequire } from 'node:module';
 import { createChunk } from '../types.js';
 import type { Chunk, ChunkMetadata, ChunkSizeConfig, Chunker, FileContent } from '../types.js';
 import { getLanguageForFile, isTreeSitterSupported } from './languages.js';
-import { extractNodes } from './ast-extractor.js';
-import type { ExtractedNode } from './ast-extractor.js';
+import { extractNodes } from './ts-extractor.js';
+import type { ExtractedNode, ExtractorFn } from './extractor-types.js';
 
 const require = createRequire(import.meta.url);
 
 // Приблизительное соотношение символов к токенам.
 const CHARS_PER_TOKEN = 4;
 
+// Возвращает функцию-экстрактор узлов для заданного языка.
+function getExtractor(langName: string): ExtractorFn {
+  switch (langName) {
+  case 'typescript':
+  case 'tsx':
+  case 'javascript':
+  case 'jsx':
+    return extractNodes;
+  case 'java':
+  case 'kotlin':
+    // Заглушки — реализация в фазах 6-7.
+    return () => [];
+  default:
+    return () => [];
+  }
+}
+
 // Чанкер для TypeScript/JavaScript с использованием tree-sitter AST.
 export class TreeSitterChunker implements Chunker {
   private readonly maxChars: number;
   private readonly overlapChars: number;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private readonly parsers = new Map<string, any>();
 
   constructor(config: ChunkSizeConfig) {
     this.maxChars = config.maxTokens * CHARS_PER_TOKEN;
@@ -23,6 +42,20 @@ export class TreeSitterChunker implements Chunker {
   // Поддерживает .ts, .tsx, .js, .jsx файлы.
   supports(filePath: string): boolean {
     return isTreeSitterSupported(filePath);
+  }
+
+  // Возвращает (или создаёт) parser для заданного языка.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private getParser(langName: string, language: any): any {
+    let parser = this.parsers.get(langName);
+    if (!parser) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const Parser = require('tree-sitter') as any;
+      parser = new Parser();
+      parser.setLanguage(language);
+      this.parsers.set(langName, parser);
+    }
+    return parser;
   }
 
   chunk(file: FileContent): Chunk[] {
@@ -35,18 +68,16 @@ export class TreeSitterChunker implements Chunker {
       return [];
     }
 
-    // Создаём парсер и разбираем файл.
+    // Получаем parser из кэша.
     // bufferSize: буфер tree-sitter должен быть минимум 2x размера контента,
     // иначе для крупных файлов (>16KB сложной вложенности) возникает EINVAL.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const Parser = require('tree-sitter') as any;
-    const parser = new Parser();
-    parser.setLanguage(langInfo.language);
+    const parser = this.getParser(langInfo.name, langInfo.language);
     const bufferSize = Math.max(file.content.length * 2, 65536);
     const tree = parser.parse(file.content, null, { bufferSize });
 
-    // Извлекаем семантические узлы.
-    const extractedNodes = extractNodes(tree.rootNode);
+    // Извлекаем семантические узлы через маршрутизатор экстракторов.
+    const extractor = getExtractor(langInfo.name);
+    const extractedNodes = extractor(tree.rootNode);
 
     // Если узлов нет — весь файл как один code-чанк.
     if (extractedNodes.length === 0) {
