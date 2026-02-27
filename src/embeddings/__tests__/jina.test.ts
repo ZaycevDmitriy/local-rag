@@ -218,8 +218,8 @@ describe('JinaTextEmbedder', () => {
       const embedder = new JinaTextEmbedder(DEFAULT_CONFIG);
       const promise = embedder.embed('test');
 
-      // Продвигаем таймер на 1с (первый retry delay).
-      await vi.advanceTimersByTimeAsync(1000);
+      // При 429 первый retry delay = 60_000ms * 1 = 60с.
+      await vi.advanceTimersByTimeAsync(60_000);
 
       const result = await promise;
 
@@ -271,18 +271,20 @@ describe('JinaTextEmbedder', () => {
         caughtError = err;
       });
 
-      // Продвигаем таймеры: 1с + 2с + 4с = 7с для всех retry.
-      await vi.advanceTimersByTimeAsync(1000);
-      await vi.advanceTimersByTimeAsync(2000);
-      await vi.advanceTimersByTimeAsync(4000);
+      // При 429 delays = 60_000 * attempt: 60с, 120с, 180с, 240с, 300с (MAX_RETRIES=5).
+      await vi.advanceTimersByTimeAsync(60_000);
+      await vi.advanceTimersByTimeAsync(120_000);
+      await vi.advanceTimersByTimeAsync(180_000);
+      await vi.advanceTimersByTimeAsync(240_000);
+      await vi.advanceTimersByTimeAsync(300_000);
 
       await promise;
 
       expect(caughtError).toBeDefined();
       expect(caughtError!.message).toBe('Jina API error: 429 Too Many Requests');
 
-      // 1 начальная попытка + 3 retry = 4 вызова.
-      expect(fetchMock).toHaveBeenCalledTimes(4);
+      // 1 начальная попытка + 5 retry = 6 вызовов.
+      expect(fetchMock).toHaveBeenCalledTimes(6);
     });
   });
 
