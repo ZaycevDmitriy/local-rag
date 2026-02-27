@@ -29,7 +29,10 @@ git clone <repo-url> local-rag
 cd local-rag
 npm install
 npm run build
+npm install -g .
 ```
+
+> **Почему `npm install -g .`?** Пакет не опубликован в npm-реестре, поэтому `npx rag` не работает из других директорий — npx не находит пакет. Глобальная установка из локальной папки (`.`) регистрирует команду `rag` в системе и делает её доступной из любого места.
 
 ### 3. PostgreSQL
 
