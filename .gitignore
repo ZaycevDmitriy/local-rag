@@ -12,3 +12,10 @@ dist
 
 # Локальная конфигурация (содержит личные пути и источники данных)
 rag.config.yaml
+
+# AI agent / skills (локальные конфиги)
+.claude/
+.mcp.json
+.ai-factory.json
+.agents/
+skills-lock.json
