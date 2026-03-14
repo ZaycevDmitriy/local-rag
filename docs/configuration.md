@@ -1,0 +1,121 @@
+[← CLI-команды](cli.md) · [Back to README](../README.md) · [MCP-интеграция →](mcp-integration.md)
+
+# Конфигурация
+
+## rag.config.yaml
+
+```yaml
+database:
+  host: localhost
+  port: 5432
+  name: local_rag
+  user: rag
+  password: rag
+
+embeddings:
+  provider: jina                    # jina | openai
+  jina:
+    apiKey: ${JINA_API_KEY}         # Подстановка переменных окружения
+    model: jina-embeddings-v3
+    dimensions: 1024
+
+reranker:
+  provider: jina                    # jina | none
+  jina:
+    apiKey: ${JINA_API_KEY}
+    model: jina-reranker-v2-base-multilingual
+
+search:
+  bm25Weight: 0.4                   # Вес BM25 в RRF
+  vectorWeight: 0.6                 # Вес векторного поиска
+  retrieveTopK: 50                  # Сколько результатов брать из каждого канала
+  finalTopK: 10                     # Финальное количество результатов
+  rrf:
+    k: 60                           # Параметр RRF fusion
+
+sources:
+  - name: my-project
+    type: local
+    path: /path/to/project
+    include: ['**/*.ts', '**/*.md']
+    exclude: ['**/node_modules/**', '**/dist/**']
+
+  - name: some-lib
+    type: git
+    url: https://github.com/user/some-lib
+    branch: main
+    include: ['src/**/*.ts']
+
+indexing:
+  chunkSize:
+    maxTokens: 1000                 # Макс. размер чанка в токенах
+    overlap: 100                    # Перекрытие между чанками
+  git:
+    cloneDir: ~/.local/share/rag/repos  # Куда клонировать Git-репозитории
+```
+
+## Путь к конфигу
+
+Конфиг ищется в следующем порядке:
+
+| Приоритет | Источник | При отсутствии файла |
+|-----------|----------|---------------------|
+| 0 | `--config <path>` (CLI / MCP-сервер) | ошибка с указанием пути |
+| 1 | `RAG_CONFIG=<path>` (переменная окружения) | ошибка с указанием пути |
+| 2 | `./rag.config.yaml` (текущая директория) | продолжить поиск |
+| 3 | `~/.config/rag/config.yaml` | продолжить поиск |
+| — | Ничего не найдено | дефолтные значения |
+
+`RAG_CONFIG` удобен при запуске MCP-сервера как глобального инструмента, когда рабочая директория принадлежит другому проекту:
+
+```json
+{
+  "mcpServers": {
+    "local-rag": {
+      "command": "node",
+      "args": ["/absolute/path/to/local-rag/dist/mcp-entry.js"],
+      "env": {
+        "RAG_CONFIG": "/absolute/path/to/local-rag/rag.config.yaml",
+        "JINA_API_KEY": "your_key"
+      }
+    }
+  }
+}
+```
+
+## Переменные окружения
+
+В `apiKey` поддерживается синтаксис `${ENV_VAR}` — значение берётся из переменной окружения.
+
+## Провайдеры эмбеддингов
+
+| Провайдер | Модель по умолчанию | Размерность | Нужен ключ |
+|-----------|---------------------|-------------|------------|
+| `jina` | `jina-embeddings-v3` | 1024 | `JINA_API_KEY` |
+| `openai` | `text-embedding-3-small` | 1536 | `OPENAI_API_KEY` |
+
+## Фильтрация файлов
+
+При индексации файлы фильтруются в таком порядке:
+
+1. `.gitignore` — если директория является Git-репозиторием
+2. `.ragignore` — аналогичный формат, специфичный для RAG
+3. `include` / `exclude` из конфигурации источника
+4. Бинарные файлы пропускаются автоматически
+
+Пример `.ragignore`:
+
+```
+# Исключить тестовые файлы.
+**/__tests__/**
+**/*.test.ts
+
+# Исключить сгенерированное.
+dist/
+*.min.js
+```
+
+## See Also
+
+- [CLI-команды](cli.md) — полная справка по командам
+- [MCP-интеграция](mcp-integration.md) — подключение к AI-агентам
