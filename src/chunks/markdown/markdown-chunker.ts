@@ -1,5 +1,6 @@
 import { createChunk } from '../types.js';
 import type { Chunk, ChunkMetadata, ChunkSizeConfig, Chunker, FileContent } from '../types.js';
+import { computeOverlap } from '../overlap.js';
 
 // Приблизительное соотношение символов к токенам.
 const CHARS_PER_TOKEN = 4;
@@ -25,12 +26,8 @@ interface Section {
 export class MarkdownChunker implements Chunker {
   private readonly maxChars: number;
   private readonly overlapChars: number;
-  private readonly maxTokens: number;
-  private readonly overlap: number;
 
   constructor(config: ChunkSizeConfig) {
-    this.maxTokens = config.maxTokens;
-    this.overlap = config.overlap;
     this.maxChars = config.maxTokens * CHARS_PER_TOKEN;
     this.overlapChars = config.overlap * CHARS_PER_TOKEN;
   }
@@ -170,7 +167,7 @@ export class MarkdownChunker implements Chunker {
         chunks.push(createChunk(file.sourceId, content, metadata));
 
         // Вычисляем overlap.
-        const { overlapLines, overlapLength } = this.computeOverlap(currentLines);
+        const { overlapLines, overlapLength } = computeOverlap(currentLines, this.overlapChars);
         chunkStartLine = chunkStartLine + currentLines.length - overlapLines.length;
         currentLines = [...overlapLines];
         currentLength = overlapLength;
@@ -198,21 +195,4 @@ export class MarkdownChunker implements Chunker {
     return chunks;
   }
 
-  // Вычисляет строки для overlap из конца текущего чанка.
-  private computeOverlap(lines: string[]): { overlapLines: string[]; overlapLength: number } {
-    const overlapLines: string[] = [];
-    let overlapLength = 0;
-
-    for (let i = lines.length - 1; i >= 0; i--) {
-      const line = lines[i]!;
-      const lineLen = line.length + 1;
-      if (overlapLength + lineLen > this.overlapChars && overlapLines.length > 0) {
-        break;
-      }
-      overlapLines.unshift(line);
-      overlapLength += lineLen;
-    }
-
-    return { overlapLines, overlapLength };
-  }
 }

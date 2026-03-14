@@ -1,6 +1,7 @@
 import { extname } from 'node:path';
 import { createChunk } from '../types.js';
 import type { Chunk, ChunkMetadata, ChunkSizeConfig, Chunker, FileContent } from '../types.js';
+import { computeOverlap } from '../overlap.js';
 
 // Приблизительное соотношение символов к токенам.
 const CHARS_PER_TOKEN = 4;
@@ -184,7 +185,7 @@ export class FallbackChunker implements Chunker {
         chunks.push(this.buildChunk(file, content, language, chunkStartLine, endLine));
 
         // Overlap.
-        const { overlapLines, overlapLength } = this.computeOverlap(currentLines);
+        const { overlapLines, overlapLength } = computeOverlap(currentLines, this.overlapChars);
         chunkStartLine = chunkStartLine + currentLines.length - overlapLines.length;
         currentLines = [...overlapLines];
         currentLength = overlapLength;
@@ -201,24 +202,6 @@ export class FallbackChunker implements Chunker {
     }
 
     return chunks;
-  }
-
-  // Вычисляет строки для overlap из конца текущего чанка.
-  private computeOverlap(lines: string[]): { overlapLines: string[]; overlapLength: number } {
-    const overlapLines: string[] = [];
-    let overlapLength = 0;
-
-    for (let i = lines.length - 1; i >= 0; i--) {
-      const line = lines[i]!;
-      const lineLen = line.length + 1;
-      if (overlapLength + lineLen > this.overlapChars && overlapLines.length > 0) {
-        break;
-      }
-      overlapLines.unshift(line);
-      overlapLength += lineLen;
-    }
-
-    return { overlapLines, overlapLength };
   }
 
   // Создаёт чанк с метаданными типа code.

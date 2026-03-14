@@ -1,4 +1,5 @@
 import type { TextEmbedder } from './types.js';
+import { fetchWithRetry } from '../utils/retry.js';
 
 // Конфигурация Jina Embeddings.
 interface JinaConfig {
@@ -18,22 +19,8 @@ interface JinaEmbeddingResponse {
 // Максимальное количество элементов в одном батче.
 const BATCH_SIZE = 64;
 
-// Максимальное количество повторных попыток.
-const MAX_RETRIES = 5;
-
-// Базовая задержка между попытками при 5xx (мс).
-const BASE_DELAY_MS = 1000;
-
-// Задержка при 429 Too Many Requests (мс): 60с, 120с, 240с...
-const RATE_LIMIT_DELAY_MS = 60_000;
-
 // URL Jina Embeddings API.
 const JINA_API_URL = 'https://api.jina.ai/v1/embeddings';
-
-// Промис с задержкой для retry.
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
 
 // Реализация TextEmbedder для Jina Embeddings v3.
 export class JinaTextEmbedder implements TextEmbedder {
@@ -92,53 +79,38 @@ export class JinaTextEmbedder implements TextEmbedder {
       truncate: true,
     });
 
-    let lastError: Error | undefined;
-
-    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-      if (attempt > 0) {
-        // При 429 — фиксированная задержка 60с * попытка; при 5xx — экспоненциальная.
-        const delayMs = lastError?.message.includes('429')
-          ? RATE_LIMIT_DELAY_MS * attempt
-          : BASE_DELAY_MS * Math.pow(2, attempt - 1);
-        process.stderr.write(`  [jina] retry ${attempt}/${MAX_RETRIES}, wait ${Math.round(delayMs / 1000)}s\n`);
-        await delay(delayMs);
-      }
-
-      const response = await fetch(JINA_API_URL, {
+    const response = await fetchWithRetry(
+      JINA_API_URL,
+      {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${this.apiKey}`,
           'Content-Type': 'application/json',
         },
         body,
-      });
+      },
+      {
+        maxRetries: 5,
+        baseDelayMs: 1000,
+        rateLimitDelayMs: 60_000,
+        errorPrefix: 'Jina API',
+        onRetry: (attempt, maxRetries, delayMs) => {
+          process.stderr.write(`  [jina] retry ${attempt}/${maxRetries}, wait ${Math.round(delayMs / 1000)}s\n`);
+        },
+      },
+    );
 
-      // Retry на 429 (rate limit) и 5xx (серверные ошибки).
-      if (response.status === 429 || response.status >= 500) {
-        lastError = new Error(
-          `Jina API error: ${response.status} ${response.statusText}`,
-        );
-        if (attempt < MAX_RETRIES) {
-          continue;
-        }
-        throw lastError;
-      }
-
-      // Ошибка на остальные не-ok статусы — без retry.
-      if (!response.ok) {
-        throw new Error(
-          `Jina API error: ${response.status} ${response.statusText}`,
-        );
-      }
-
-      const json = (await response.json()) as JinaEmbeddingResponse;
-
-      // Сортируем по index для гарантии порядка.
-      const sorted = [...json.data].sort((a, b) => a.index - b.index);
-      return sorted.map((item) => item.embedding);
+    // Ошибка на не-ok статусы (не retryable — 4xx кроме 429).
+    if (!response.ok) {
+      throw new Error(
+        `Jina API error: ${response.status} ${response.statusText}`,
+      );
     }
 
-    // Сюда не должны попасть, но на всякий случай.
-    throw lastError ?? new Error('Jina API: unexpected retry exhaustion');
+    const json = (await response.json()) as JinaEmbeddingResponse;
+
+    // Сортируем по index для гарантии порядка.
+    const sorted = [...json.data].sort((a, b) => a.index - b.index);
+    return sorted.map((item) => item.embedding);
   }
 }
