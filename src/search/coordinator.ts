@@ -3,6 +3,7 @@ import type { SearchConfig } from '../config/schema.js';
 import type { TextEmbedder } from '../embeddings/types.js';
 import type { ChunkStorage } from '../storage/chunks.js';
 import type { SourceStorage } from '../storage/sources.js';
+import type { SourceRow } from '../storage/schema.js';
 import { rrfFuse } from './hybrid.js';
 import type { Reranker } from './reranker/types.js';
 import type { SearchQuery, SearchResponse, SearchResult } from './types.js';
@@ -10,8 +11,14 @@ import type { SearchQuery, SearchResponse, SearchResult } from './types.js';
 // Максимальная длина snippet в символах.
 const SNIPPET_MAX_LENGTH = 500;
 
+// TTL кэша sources (мс). CLI и MCP — разные процессы, invalidation не нужна.
+const SOURCE_CACHE_TTL_MS = 5 * 60 * 1000;
+
 // Оркестратор hybrid search pipeline.
 export class SearchCoordinator {
+  private sourceCache: Map<string, SourceRow> | null = null;
+  private sourceCacheUpdatedAt = 0;
+
   constructor(
     private chunkStorage: ChunkStorage,
     private sourceStorage: SourceStorage,
@@ -59,9 +66,8 @@ export class SearchCoordinator {
     const chunkIds = candidates.map((r) => r.id);
     const chunks = await this.chunkStorage.getByIds(chunkIds);
 
-    // 6. Загружаем источники для маппинга имён.
-    const sources = await this.sourceStorage.getAll();
-    const sourceMap = new Map(sources.map((s) => [s.id, s]));
+    // 6. Загружаем источники из кэша (TTL 5 мин).
+    const sourceMap = await this.getSourceMap();
 
     // 7. Строим карты оценок для BM25, vector и RRF.
     const bm25ScoreMap = new Map(bm25Results.map((r) => [r.id, r.score]));
@@ -118,5 +124,18 @@ export class SearchCoordinator {
       results,
       totalCandidates: fused.length,
     };
+  }
+
+  // Возвращает кэшированную Map sources с TTL.
+  private async getSourceMap(): Promise<Map<string, SourceRow>> {
+    const now = Date.now();
+    if (this.sourceCache && now - this.sourceCacheUpdatedAt < SOURCE_CACHE_TTL_MS) {
+      return this.sourceCache;
+    }
+
+    const sources = await this.sourceStorage.getAll();
+    this.sourceCache = new Map(sources.map((s) => [s.id, s]));
+    this.sourceCacheUpdatedAt = now;
+    return this.sourceCache;
   }
 }

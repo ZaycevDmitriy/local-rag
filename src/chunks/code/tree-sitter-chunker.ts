@@ -1,6 +1,7 @@
 import { createRequire } from 'node:module';
 import { createChunk } from '../types.js';
 import type { Chunk, ChunkMetadata, ChunkSizeConfig, Chunker, FileContent } from '../types.js';
+import { computeOverlap } from '../overlap.js';
 import { getLanguageForFile, isTreeSitterSupported } from './languages.js';
 import { extractNodes as extractTsNodes } from './ts-extractor.js';
 import { extractNodes as extractJavaNodes } from './java-extractor.js';
@@ -163,7 +164,7 @@ export class TreeSitterChunker implements Chunker {
         chunks.push(createChunk(file.sourceId, content, metadata));
 
         // Вычисляем overlap.
-        const { overlapLines, overlapLength } = this.computeOverlap(currentLines);
+        const { overlapLines, overlapLength } = computeOverlap(currentLines, this.overlapChars);
         chunkStartLine = chunkStartLine + currentLines.length - overlapLines.length;
         currentLines = [...overlapLines];
         currentLength = overlapLength;
@@ -194,21 +195,4 @@ export class TreeSitterChunker implements Chunker {
     return chunks;
   }
 
-  // Вычисляет строки для overlap из конца текущего чанка.
-  private computeOverlap(lines: string[]): { overlapLines: string[]; overlapLength: number } {
-    const overlapLines: string[] = [];
-    let overlapLength = 0;
-
-    for (let i = lines.length - 1; i >= 0; i--) {
-      const line = lines[i]!;
-      const lineLen = line.length + 1;
-      if (overlapLength + lineLen > this.overlapChars && overlapLines.length > 0) {
-        break;
-      }
-      overlapLines.unshift(line);
-      overlapLength += lineLen;
-    }
-
-    return { overlapLines, overlapLength };
-  }
 }
