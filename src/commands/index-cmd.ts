@@ -146,8 +146,29 @@ export const indexCommand = new Command('index')
           }
 
           console.log(`Индексация всех источников (${config.sources.length})...`);
+          let okCount = 0;
+          const failures: Array<{ name: string; error: string }> = [];
+
           for (const sourceConfig of config.sources) {
-            await indexSource(sourceConfig, sourceStorage, indexer, progress, cloneDir);
+            try {
+              await indexSource(sourceConfig, sourceStorage, indexer, progress, cloneDir);
+              okCount++;
+            } catch (err) {
+              const msg = err instanceof Error ? err.message : String(err);
+              console.error(`  Ошибка при индексации "${sourceConfig.name}": ${msg}`);
+              failures.push({ name: sourceConfig.name, error: msg });
+            }
+          }
+
+          // Итоговый summary.
+          if (failures.length > 0) {
+            console.log(`\nРезультат: ${okCount} ok, ${failures.length} failed`);
+            for (const f of failures) {
+              console.log(`  - ${f.name}: ${f.error}`);
+            }
+            if (okCount === 0) {
+              process.exit(1);
+            }
           }
         } else if (options.git) {
           // Ad-hoc индексация git-репозитория: --git <url> + --name.
