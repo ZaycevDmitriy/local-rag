@@ -85,6 +85,7 @@ export class OpenAITextEmbedder implements TextEmbedder {
       {
         maxRetries: 3,
         baseDelayMs: 1000,
+        rateLimitDelayMs: 60_000,
         errorPrefix: 'OpenAI API',
       },
     );

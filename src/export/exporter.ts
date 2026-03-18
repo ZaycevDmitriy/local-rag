@@ -151,12 +151,15 @@ export async function exportData(options: ExportOptions): Promise<ExportResult> 
       await appendFile(sqlFilePath, `-- Chunks (${totalSourceChunks} records)\n`, 'utf-8');
 
       while (true) {
+        // Keyset pagination: используем >= для created_at и исключаем уже обработанный cursorId,
+        // чтобы не пропустить строки с одинаковым created_at но меньшим UUID.
         const chunks: ExportChunkRow[] = cursorCreatedAt && cursorId
           ? await sql<ExportChunkRow[]>`
               SELECT id, source_id, content, content_hash, metadata, embedding, created_at
               FROM chunks
               WHERE source_id = ${sourceId}
-                AND (created_at, id) > (${cursorCreatedAt}, ${cursorId})
+                AND (created_at > ${cursorCreatedAt}
+                  OR (created_at = ${cursorCreatedAt} AND id > ${cursorId}))
               ORDER BY created_at, id
               LIMIT ${CHUNK_BATCH_SIZE}
             `

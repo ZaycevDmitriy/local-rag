@@ -9,8 +9,8 @@ const migration: Migration = {
     await sql`CREATE INDEX IF NOT EXISTS idx_chunks_source_type ON chunks ((metadata->>'sourceType'))`;
     // Индекс по language для фильтрации по языку.
     await sql`CREATE INDEX IF NOT EXISTS idx_chunks_language ON chunks ((metadata->>'language'))`;
-    // Составной индекс для keyset pagination в export.
-    await sql`CREATE INDEX IF NOT EXISTS idx_chunks_source_created ON chunks (source_id, created_at)`;
+    // Составной индекс для keyset pagination в export (включает id для полного покрытия ORDER BY created_at, id).
+    await sql`CREATE INDEX IF NOT EXISTS idx_chunks_source_created ON chunks (source_id, created_at, id)`;
   },
 };
 
