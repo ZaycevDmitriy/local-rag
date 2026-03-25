@@ -233,6 +233,71 @@ describe('JinaReranker', () => {
   });
 });
 
+describe('JinaReranker (baseUrl + providerName)', () => {
+  let fetchMock: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('использует кастомный baseUrl для запросов', async () => {
+    const docs: RerankDocument[] = [{ id: 'doc-1', content: 'text' }];
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => makeJinaRerankResponse(docs, [0.9]),
+    });
+
+    const reranker = new JinaReranker({
+      ...DEFAULT_CONFIG,
+      baseUrl: 'https://api.siliconflow.com/v1/rerank',
+      providerName: 'SiliconFlow Reranker API',
+    });
+    await reranker.rerank('query', docs, 1);
+
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('https://api.siliconflow.com/v1/rerank');
+  });
+
+  it('использует дефолтный Jina URL когда baseUrl не указан', async () => {
+    const docs: RerankDocument[] = [{ id: 'doc-1', content: 'text' }];
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => makeJinaRerankResponse(docs, [0.9]),
+    });
+
+    const reranker = new JinaReranker(DEFAULT_CONFIG);
+    await reranker.rerank('query', docs, 1);
+
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('https://api.jina.ai/v1/rerank');
+  });
+
+  it('использует providerName в сообщении об ошибке', async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: false,
+      status: 400,
+      statusText: 'Bad Request',
+    });
+
+    const docs: RerankDocument[] = [{ id: 'doc-1', content: 'text' }];
+    const reranker = new JinaReranker({
+      ...DEFAULT_CONFIG,
+      providerName: 'SiliconFlow Reranker API',
+    });
+
+    await expect(reranker.rerank('query', docs, 1)).rejects.toThrow(
+      'SiliconFlow Reranker API error: 400 Bad Request',
+    );
+  });
+});
+
 describe('NoopReranker', () => {
   it('возвращает документы в исходном порядке с score=1.0', async () => {
     const docs: RerankDocument[] = [
@@ -290,5 +355,24 @@ describe('createReranker factory', () => {
     expect(() =>
       createReranker({ provider: 'jina' }),
     ).toThrow('Jina reranker config is required when provider is "jina"');
+  });
+
+  it('создаёт JinaReranker для провайдера siliconflow', () => {
+    const reranker = createReranker({
+      provider: 'siliconflow',
+      siliconflow: {
+        apiKey: 'sf-key',
+        model: 'Qwen/Qwen3-Reranker-0.6B',
+        topK: 10,
+      },
+    });
+
+    expect(reranker).toBeInstanceOf(JinaReranker);
+  });
+
+  it('выбрасывает ошибку, если siliconflow конфиг отсутствует', () => {
+    expect(() =>
+      createReranker({ provider: 'siliconflow' }),
+    ).toThrow('SiliconFlow reranker config is required when provider is "siliconflow"');
   });
 });

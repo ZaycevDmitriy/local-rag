@@ -1,10 +1,12 @@
 import type { Reranker, RerankDocument, RerankResult } from './types.js';
 import { fetchWithRetry } from '../../utils/retry.js';
 
-// Конфигурация Jina Reranker.
+// Конфигурация Jina-совместимого Reranker.
 interface JinaRerankerConfig {
   apiKey: string;
   model: string;
+  baseUrl?: string;
+  providerName?: string;
 }
 
 // Структура одного результата в ответе Jina Reranker API.
@@ -19,17 +21,21 @@ interface JinaRerankResponse {
   results: JinaRerankResultItem[];
 }
 
-// URL Jina Reranker API.
-const JINA_RERANK_URL = 'https://api.jina.ai/v1/rerank';
+// URL Jina Reranker API по умолчанию.
+const DEFAULT_BASE_URL = 'https://api.jina.ai/v1/rerank';
 
-// Реализация Reranker через Jina Reranker v2 API.
+// Реализация Reranker через Jina-совместимый Reranker API.
 export class JinaReranker implements Reranker {
   private readonly apiKey: string;
   private readonly model: string;
+  private readonly baseUrl: string;
+  private readonly providerName: string;
 
   constructor(config: JinaRerankerConfig) {
     this.apiKey = config.apiKey;
     this.model = config.model;
+    this.baseUrl = config.baseUrl ?? DEFAULT_BASE_URL;
+    this.providerName = config.providerName ?? 'Jina Reranker API';
   }
 
   // Переранжирует документы по релевантности запросу.
@@ -50,7 +56,7 @@ export class JinaReranker implements Reranker {
     });
 
     const response = await fetchWithRetry(
-      JINA_RERANK_URL,
+      this.baseUrl,
       {
         method: 'POST',
         headers: {
@@ -63,14 +69,14 @@ export class JinaReranker implements Reranker {
         maxRetries: 3,
         baseDelayMs: 1000,
         rateLimitDelayMs: 60_000,
-        errorPrefix: 'Jina Reranker API',
+        errorPrefix: this.providerName,
       },
     );
 
     // Ошибка на не-ok статусы (не retryable — 4xx кроме 429).
     if (!response.ok) {
       throw new Error(
-        `Jina Reranker API error: ${response.status} ${response.statusText}`,
+        `${this.providerName} error: ${response.status} ${response.statusText}`,
       );
     }
 

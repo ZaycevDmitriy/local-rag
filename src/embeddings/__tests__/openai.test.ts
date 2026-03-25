@@ -266,6 +266,72 @@ describe('OpenAITextEmbedder', () => {
   });
 });
 
+describe('OpenAITextEmbedder (baseUrl + providerName)', () => {
+  let fetchMock: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('использует кастомный baseUrl для запросов', async () => {
+    const vector = fakeVector(1024);
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => makeOpenAIResponse([vector]),
+    });
+
+    const embedder = new OpenAITextEmbedder({
+      apiKey: 'sf-key',
+      model: 'Qwen/Qwen3-Embedding-0.6B',
+      dimensions: 1024,
+      baseUrl: 'https://api.siliconflow.com/v1/embeddings',
+      providerName: 'SiliconFlow API',
+    });
+    await embedder.embed('test');
+
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('https://api.siliconflow.com/v1/embeddings');
+  });
+
+  it('использует дефолтный OpenAI URL когда baseUrl не указан', async () => {
+    const vector = fakeVector(1536);
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => makeOpenAIResponse([vector]),
+    });
+
+    const embedder = new OpenAITextEmbedder(DEFAULT_CONFIG);
+    await embedder.embed('test');
+
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('https://api.openai.com/v1/embeddings');
+  });
+
+  it('использует providerName в сообщении об ошибке', async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: false,
+      status: 400,
+      statusText: 'Bad Request',
+    });
+
+    const embedder = new OpenAITextEmbedder({
+      ...DEFAULT_CONFIG,
+      providerName: 'SiliconFlow API',
+    });
+
+    await expect(embedder.embed('test')).rejects.toThrow(
+      'SiliconFlow API error: 400 Bad Request',
+    );
+  });
+});
+
 describe('createTextEmbedder (openai)', () => {
   it('создаёт OpenAITextEmbedder для провайдера openai', () => {
     const embedder = createTextEmbedder({
@@ -285,5 +351,27 @@ describe('createTextEmbedder (openai)', () => {
     expect(() =>
       createTextEmbedder({ provider: 'openai' }),
     ).toThrow('OpenAI embeddings config is required when provider is "openai"');
+  });
+});
+
+describe('createTextEmbedder (siliconflow)', () => {
+  it('создаёт OpenAITextEmbedder для провайдера siliconflow', () => {
+    const embedder = createTextEmbedder({
+      provider: 'siliconflow',
+      siliconflow: {
+        apiKey: 'sf-key',
+        model: 'Qwen/Qwen3-Embedding-0.6B',
+        dimensions: 1024,
+      },
+    });
+
+    expect(embedder).toBeInstanceOf(OpenAITextEmbedder);
+    expect(embedder.dimensions).toBe(1024);
+  });
+
+  it('выбрасывает ошибку, если siliconflow конфиг отсутствует', () => {
+    expect(() =>
+      createTextEmbedder({ provider: 'siliconflow' }),
+    ).toThrow('SiliconFlow embeddings config is required when provider is "siliconflow"');
   });
 });

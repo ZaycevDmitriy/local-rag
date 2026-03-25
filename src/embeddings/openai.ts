@@ -1,11 +1,13 @@
 import type { TextEmbedder } from './types.js';
 import { fetchWithRetry } from '../utils/retry.js';
 
-// Конфигурация OpenAI Embeddings.
+// Конфигурация OpenAI-совместимых Embeddings.
 interface OpenAIConfig {
   apiKey: string;
   model: string;
   dimensions: number;
+  baseUrl?: string;
+  providerName?: string;
 }
 
 // Структура ответа OpenAI API.
@@ -16,19 +18,23 @@ interface OpenAIEmbeddingResponse {
 // Максимальное количество элементов в одном батче.
 const BATCH_SIZE = 100;
 
-// URL OpenAI Embeddings API.
-const OPENAI_API_URL = 'https://api.openai.com/v1/embeddings';
+// URL OpenAI Embeddings API по умолчанию.
+const DEFAULT_BASE_URL = 'https://api.openai.com/v1/embeddings';
 
-// Реализация TextEmbedder для OpenAI Embeddings.
+// Реализация TextEmbedder для OpenAI-совместимых Embeddings API.
 export class OpenAITextEmbedder implements TextEmbedder {
   readonly dimensions: number;
   private readonly apiKey: string;
   private readonly model: string;
+  private readonly baseUrl: string;
+  private readonly providerName: string;
 
   constructor(config: OpenAIConfig) {
     this.apiKey = config.apiKey;
     this.model = config.model;
     this.dimensions = config.dimensions;
+    this.baseUrl = config.baseUrl ?? DEFAULT_BASE_URL;
+    this.providerName = config.providerName ?? 'OpenAI API';
   }
 
   // Генерация эмбеддинга для одного текста.
@@ -73,7 +79,7 @@ export class OpenAITextEmbedder implements TextEmbedder {
     });
 
     const response = await fetchWithRetry(
-      OPENAI_API_URL,
+      this.baseUrl,
       {
         method: 'POST',
         headers: {
@@ -86,14 +92,14 @@ export class OpenAITextEmbedder implements TextEmbedder {
         maxRetries: 3,
         baseDelayMs: 1000,
         rateLimitDelayMs: 60_000,
-        errorPrefix: 'OpenAI API',
+        errorPrefix: this.providerName,
       },
     );
 
     // Ошибка на не-ok статусы (не retryable — 4xx кроме 429).
     if (!response.ok) {
       throw new Error(
-        `OpenAI API error: ${response.status} ${response.statusText}`,
+        `${this.providerName} error: ${response.status} ${response.statusText}`,
       );
     }
 

@@ -23,11 +23,19 @@ export const OpenAIEmbeddingsSchema = z.object({
   dimensions: z.number().default(1536),
 });
 
+// Схема SiliconFlow Embeddings.
+export const SiliconFlowEmbeddingsSchema = z.object({
+  apiKey: z.string(),
+  model: z.string().default('Qwen/Qwen3-Embedding-0.6B'),
+  dimensions: z.number().default(1024),
+});
+
 // Схема конфигурации эмбеддингов.
 export const EmbeddingsConfigSchema = z.object({
-  provider: z.enum(['jina', 'openai', 'self-hosted']).default('jina'),
+  provider: z.enum(['jina', 'openai', 'siliconflow', 'self-hosted']).default('jina'),
   jina: JinaEmbeddingsSchema.optional(),
   openai: OpenAIEmbeddingsSchema.optional(),
+  siliconflow: SiliconFlowEmbeddingsSchema.optional(),
 });
 
 // Схема Jina Reranker.
@@ -37,10 +45,18 @@ export const JinaRerankerSchema = z.object({
   topK: z.number().default(10),
 });
 
+// Схема SiliconFlow Reranker.
+export const SiliconFlowRerankerSchema = z.object({
+  apiKey: z.string(),
+  model: z.string().default('Qwen/Qwen3-Reranker-0.6B'),
+  topK: z.number().default(10),
+});
+
 // Схема конфигурации реранкера.
 export const RerankerConfigSchema = z.object({
-  provider: z.enum(['jina', 'none']).default('none'),
+  provider: z.enum(['jina', 'siliconflow', 'none']).default('none'),
   jina: JinaRerankerSchema.optional(),
+  siliconflow: SiliconFlowRerankerSchema.optional(),
 });
 
 // Схема RRF (Reciprocal Rank Fusion).
@@ -116,7 +132,9 @@ export type DatabaseConfig = z.infer<typeof DatabaseConfigSchema>;
 export type JinaEmbeddingsConfig = z.infer<typeof JinaEmbeddingsSchema>;
 export type OpenAIEmbeddingsConfig = z.infer<typeof OpenAIEmbeddingsSchema>;
 export type EmbeddingsConfig = z.infer<typeof EmbeddingsConfigSchema>;
+export type SiliconFlowEmbeddingsConfig = z.infer<typeof SiliconFlowEmbeddingsSchema>;
 export type JinaRerankerConfig = z.infer<typeof JinaRerankerSchema>;
+export type SiliconFlowRerankerConfig = z.infer<typeof SiliconFlowRerankerSchema>;
 export type RerankerConfig = z.infer<typeof RerankerConfigSchema>;
 export type RrfConfig = z.infer<typeof RrfConfigSchema>;
 export type SearchConfig = z.infer<typeof SearchConfigSchema>;
