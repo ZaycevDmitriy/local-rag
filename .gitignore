@@ -19,3 +19,4 @@ rag.config.yaml
 .ai-factory.json
 .agents/
 skills-lock.json
+.playwright-mcp

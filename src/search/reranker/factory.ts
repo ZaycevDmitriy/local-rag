@@ -15,6 +15,18 @@ export function createReranker(config: RerankerConfig): Reranker {
       model: config.jina.model,
     });
   }
+  case 'siliconflow': {
+    if (!config.siliconflow) {
+      throw new Error('SiliconFlow reranker config is required when provider is "siliconflow"');
+    }
+    return new JinaReranker({
+      apiKey: config.siliconflow.apiKey,
+      model: config.siliconflow.model,
+      baseUrl: 'https://api.siliconflow.com/v1/rerank',
+      providerName: 'SiliconFlow Reranker API',
+      documentFormat: 'string',
+    });
+  }
   case 'none':
     return new NoopReranker();
   default:

@@ -26,6 +26,18 @@ export function createTextEmbedder(config: EmbeddingsConfig): TextEmbedder {
       dimensions: config.openai.dimensions,
     });
   }
+  case 'siliconflow': {
+    if (!config.siliconflow) {
+      throw new Error('SiliconFlow embeddings config is required when provider is "siliconflow"');
+    }
+    return new OpenAITextEmbedder({
+      apiKey: config.siliconflow.apiKey,
+      model: config.siliconflow.model,
+      dimensions: config.siliconflow.dimensions,
+      baseUrl: 'https://api.siliconflow.com/v1/embeddings',
+      providerName: 'SiliconFlow API',
+    });
+  }
   case 'self-hosted':
     throw new Error('Self-hosted embedder not implemented yet');
   default:
