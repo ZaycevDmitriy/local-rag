@@ -18,6 +18,9 @@ async function main(): Promise<void> {
   const config = await loadConfig(configPath);
   const sql = createDb(config.database);
 
+  // Health-check: проверяем подключение к БД.
+  await sql`SELECT 1`;
+
   // Корректное завершение при получении сигналов.
   const shutdown = async (): Promise<void> => {
     await closeDb(sql);

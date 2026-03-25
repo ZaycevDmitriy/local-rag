@@ -191,7 +191,8 @@ describe('OpenAITextEmbedder', () => {
       const embedder = new OpenAITextEmbedder(DEFAULT_CONFIG);
       const promise = embedder.embed('test');
 
-      await vi.advanceTimersByTimeAsync(1000);
+      // rateLimitDelayMs = 60_000, attempt=1 → задержка 60s.
+      await vi.advanceTimersByTimeAsync(60_000);
 
       const result = await promise;
 
@@ -239,9 +240,10 @@ describe('OpenAITextEmbedder', () => {
         caughtError = err;
       });
 
-      await vi.advanceTimersByTimeAsync(1000);
-      await vi.advanceTimersByTimeAsync(2000);
-      await vi.advanceTimersByTimeAsync(4000);
+      // rateLimitDelayMs = 60_000: attempt 1 → 60s, attempt 2 → 120s, attempt 3 → 180s.
+      await vi.advanceTimersByTimeAsync(60_000);
+      await vi.advanceTimersByTimeAsync(120_000);
+      await vi.advanceTimersByTimeAsync(180_000);
 
       await promise;
 

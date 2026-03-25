@@ -1,4 +1,5 @@
 import type { TextEmbedder } from './types.js';
+import { fetchWithRetry } from '../utils/retry.js';
 
 // Конфигурация OpenAI Embeddings.
 interface OpenAIConfig {
@@ -15,19 +16,8 @@ interface OpenAIEmbeddingResponse {
 // Максимальное количество элементов в одном батче.
 const BATCH_SIZE = 100;
 
-// Максимальное количество повторных попыток.
-const MAX_RETRIES = 3;
-
-// Базовая задержка между попытками (мс).
-const BASE_DELAY_MS = 1000;
-
 // URL OpenAI Embeddings API.
 const OPENAI_API_URL = 'https://api.openai.com/v1/embeddings';
-
-// Промис с задержкой для retry.
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
 
 // Реализация TextEmbedder для OpenAI Embeddings.
 export class OpenAITextEmbedder implements TextEmbedder {
@@ -82,50 +72,35 @@ export class OpenAITextEmbedder implements TextEmbedder {
       dimensions: this.dimensions,
     });
 
-    let lastError: Error | undefined;
-
-    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-      if (attempt > 0) {
-        // Экспоненциальная задержка: 1с, 2с, 4с.
-        const delayMs = BASE_DELAY_MS * Math.pow(2, attempt - 1);
-        await delay(delayMs);
-      }
-
-      const response = await fetch(OPENAI_API_URL, {
+    const response = await fetchWithRetry(
+      OPENAI_API_URL,
+      {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${this.apiKey}`,
           'Content-Type': 'application/json',
         },
         body,
-      });
+      },
+      {
+        maxRetries: 3,
+        baseDelayMs: 1000,
+        rateLimitDelayMs: 60_000,
+        errorPrefix: 'OpenAI API',
+      },
+    );
 
-      // Retry на 429 (rate limit) и 5xx (серверные ошибки).
-      if (response.status === 429 || response.status >= 500) {
-        lastError = new Error(
-          `OpenAI API error: ${response.status} ${response.statusText}`,
-        );
-        if (attempt < MAX_RETRIES) {
-          continue;
-        }
-        throw lastError;
-      }
-
-      // Ошибка на остальные не-ok статусы — без retry.
-      if (!response.ok) {
-        throw new Error(
-          `OpenAI API error: ${response.status} ${response.statusText}`,
-        );
-      }
-
-      const json = (await response.json()) as OpenAIEmbeddingResponse;
-
-      // Сортируем по index для гарантии порядка.
-      const sorted = [...json.data].sort((a, b) => a.index - b.index);
-      return sorted.map((item) => item.embedding);
+    // Ошибка на не-ok статусы (не retryable — 4xx кроме 429).
+    if (!response.ok) {
+      throw new Error(
+        `OpenAI API error: ${response.status} ${response.statusText}`,
+      );
     }
 
-    // Сюда не должны попасть, но на всякий случай.
-    throw lastError ?? new Error('OpenAI API: unexpected retry exhaustion');
+    const json = (await response.json()) as OpenAIEmbeddingResponse;
+
+    // Сортируем по index для гарантии порядка.
+    const sorted = [...json.data].sort((a, b) => a.index - b.index);
+    return sorted.map((item) => item.embedding);
   }
 }

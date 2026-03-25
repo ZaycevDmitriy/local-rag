@@ -7,11 +7,15 @@ import type { IndexedFileStorage } from '../storage/indexed-files.js';
 import type { SourceStorage } from '../storage/sources.js';
 import type { SourceRow } from '../storage/schema.js';
 import type { ScannedFile } from '../sources/local.js';
+import { pMap } from '../utils/concurrency.js';
 import { detectChanges } from './incremental.js';
 import type { IndexResult, ProgressReporter } from './progress.js';
 
 // Размер батча для эмбеддингов.
 const EMBED_BATCH_SIZE = 64;
+
+// Количество параллельных запросов к API эмбеддингов.
+const EMBED_CONCURRENCY = 3;
 
 // Пайплайн индексации источника с инкрементальной поддержкой.
 export class Indexer {
@@ -56,19 +60,31 @@ export class Indexer {
     }
     this.progress.onChunkComplete(allChunks.length, changes.changed.length);
 
-    // 4. Генерируем эмбеддинги батчами (до записи в БД, чтобы не потерять данные при ошибке API).
-    const embeddings: number[][] = [];
+    // 4. Генерируем эмбеддинги батчами параллельно (до записи в БД, чтобы не потерять данные при ошибке API).
+    let embeddings: number[][] = [];
     if (allChunks.length > 0) {
+      // Разбиваем на батчи по EMBED_BATCH_SIZE.
+      const batches: typeof allChunks[] = [];
       for (let i = 0; i < allChunks.length; i += EMBED_BATCH_SIZE) {
-        const batch = allChunks.slice(i, i + EMBED_BATCH_SIZE);
-        const texts = batch.map((c) => c.content);
-        const batchEmbeddings = await this.embedder.embedBatch(texts);
-        embeddings.push(...batchEmbeddings);
-        this.progress.onEmbedProgress(
-          Math.min(i + EMBED_BATCH_SIZE, allChunks.length),
-          allChunks.length,
-        );
+        batches.push(allChunks.slice(i, i + EMBED_BATCH_SIZE));
       }
+
+      // Атомарный счётчик для прогресса (JS однопоточен — безопасно).
+      let completedChunks = 0;
+
+      const batchResults = await pMap(
+        batches,
+        async (batch) => {
+          const texts = batch.map((c) => c.content);
+          const batchEmbeddings = await this.embedder.embedBatch(texts);
+          completedChunks += batch.length;
+          this.progress.onEmbedProgress(completedChunks, allChunks.length);
+          return batchEmbeddings;
+        },
+        EMBED_CONCURRENCY,
+      );
+
+      embeddings = batchResults.flat();
     }
 
     // 5. Вставляем новые чанки.

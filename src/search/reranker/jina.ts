@@ -1,4 +1,5 @@
 import type { Reranker, RerankDocument, RerankResult } from './types.js';
+import { fetchWithRetry } from '../../utils/retry.js';
 
 // Конфигурация Jina Reranker.
 interface JinaRerankerConfig {
@@ -18,19 +19,8 @@ interface JinaRerankResponse {
   results: JinaRerankResultItem[];
 }
 
-// Максимальное количество повторных попыток.
-const MAX_RETRIES = 3;
-
-// Базовая задержка между попытками (мс).
-const BASE_DELAY_MS = 1000;
-
 // URL Jina Reranker API.
 const JINA_RERANK_URL = 'https://api.jina.ai/v1/rerank';
-
-// Промис с задержкой для retry.
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
 
 // Реализация Reranker через Jina Reranker v2 API.
 export class JinaReranker implements Reranker {
@@ -59,53 +49,38 @@ export class JinaReranker implements Reranker {
       top_n: topK,
     });
 
-    let lastError: Error | undefined;
-
-    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-      if (attempt > 0) {
-        // Экспоненциальная задержка: 1с, 2с, 4с.
-        const delayMs = BASE_DELAY_MS * Math.pow(2, attempt - 1);
-        await delay(delayMs);
-      }
-
-      const response = await fetch(JINA_RERANK_URL, {
+    const response = await fetchWithRetry(
+      JINA_RERANK_URL,
+      {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${this.apiKey}`,
           'Content-Type': 'application/json',
         },
         body,
-      });
+      },
+      {
+        maxRetries: 3,
+        baseDelayMs: 1000,
+        rateLimitDelayMs: 60_000,
+        errorPrefix: 'Jina Reranker API',
+      },
+    );
 
-      // Retry на 429 (rate limit) и 5xx (серверные ошибки).
-      if (response.status === 429 || response.status >= 500) {
-        lastError = new Error(
-          `Jina Reranker API error: ${response.status} ${response.statusText}`,
-        );
-        if (attempt < MAX_RETRIES) {
-          continue;
-        }
-        throw lastError;
-      }
-
-      // Ошибка на остальные не-ok статусы — без retry.
-      if (!response.ok) {
-        throw new Error(
-          `Jina Reranker API error: ${response.status} ${response.statusText}`,
-        );
-      }
-
-      const json = (await response.json()) as JinaRerankResponse;
-
-      // Маппинг результатов: восстанавливаем id из исходного массива по index.
-      return json.results.map((item) => ({
-        id: documents[item.index]!.id,
-        score: item.relevance_score,
-        index: item.index,
-      }));
+    // Ошибка на не-ok статусы (не retryable — 4xx кроме 429).
+    if (!response.ok) {
+      throw new Error(
+        `Jina Reranker API error: ${response.status} ${response.statusText}`,
+      );
     }
 
-    // Сюда не должны попасть, но на всякий случай.
-    throw lastError ?? new Error('Jina Reranker API: unexpected retry exhaustion');
+    const json = (await response.json()) as JinaRerankResponse;
+
+    // Маппинг результатов: восстанавливаем id из исходного массива по index.
+    return json.results.map((item) => ({
+      id: documents[item.index]!.id,
+      score: item.relevance_score,
+      index: item.index,
+    }));
   }
 }

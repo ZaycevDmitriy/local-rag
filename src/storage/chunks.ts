@@ -4,9 +4,6 @@ import type postgres from 'postgres';
 import type { ChunkRow } from './schema.js';
 import type { ChunkMetadata } from '../chunks/types.js';
 
-// Приводим ChunkMetadata к типу, совместимому с postgres.JSONValue.
-type JsonSafe = postgres.JSONValue;
-
 // Размер пачки для batch-вставки.
 const BATCH_SIZE = 100;
 
@@ -14,7 +11,9 @@ const BATCH_SIZE = 100;
 export class ChunkStorage {
   constructor(private sql: postgres.Sql) {}
 
-  // Вставляет чанки пачками по BATCH_SIZE в транзакции.
+  // Вставляет чанки пачками по BATCH_SIZE одним multi-row INSERT внутри транзакции.
+  // Используем sql.unsafe() с параметризованным VALUES для type casts (::vector, ::jsonb),
+  // что невозможно через стандартный sql tagged template хелпер.
   async insertBatch(chunks: Array<{
     sourceId: string;
     content: string;
@@ -22,30 +21,30 @@ export class ChunkStorage {
     metadata: ChunkMetadata;
     embedding: number[];
   }>): Promise<void> {
-    for (let i = 0; i < chunks.length; i += BATCH_SIZE) {
-      const batch = chunks.slice(i, i + BATCH_SIZE);
+    await this.sql.begin(async (tx) => {
+      for (let i = 0; i < chunks.length; i += BATCH_SIZE) {
+        const batch = chunks.slice(i, i + BATCH_SIZE);
 
-      // Вставляем пачку в одной транзакции для снижения round-trip overhead.
-      // Type assertion нужен: TransactionSql работает как tagged template в runtime,
-      // но TypeScript-типы пакета postgres не отражают это корректно.
-      await this.sql.begin(async (tx: unknown) => {
-        const query = tx as postgres.Sql;
-        for (const chunk of batch) {
-          const vectorStr = pgvector.toSql(chunk.embedding) as string;
+        // Строим multi-row VALUES: ($1::uuid, $2, $3, $4::jsonb, $5::vector), ($6, ...)
+        const valueClauses = batch.map((_, idx) => {
+          const base = idx * 5;
+          return `($${base + 1}::uuid, $${base + 2}, $${base + 3}, $${base + 4}::jsonb, $${base + 5}::vector)`;
+        }).join(', ');
 
-          await query`
-            INSERT INTO chunks (source_id, content, content_hash, metadata, embedding)
-            VALUES (
-              ${chunk.sourceId},
-              ${chunk.content},
-              ${chunk.contentHash},
-              ${this.sql.json(chunk.metadata as unknown as JsonSafe)},
-              ${vectorStr}::vector
-            )
-          `;
-        }
-      });
-    }
+        const params = batch.flatMap((chunk) => [
+          chunk.sourceId,
+          chunk.content,
+          chunk.contentHash,
+          JSON.stringify(chunk.metadata),
+          pgvector.toSql(chunk.embedding) as string,
+        ]);
+
+        await tx.unsafe(
+          `INSERT INTO chunks (source_id, content, content_hash, metadata, embedding) VALUES ${valueClauses}`,
+          params,
+        );
+      }
+    });
   }
 
   // Удаляет все чанки источника. Возвращает количество удаленных.

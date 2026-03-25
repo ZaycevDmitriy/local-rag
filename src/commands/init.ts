@@ -8,6 +8,7 @@ import {
   initialMigration,
   createVectorDimensionsMigration,
   pathIndexMigration,
+  metadataIndexesMigration,
 } from '../storage/index.js';
 import type { Migration } from '../storage/index.js';
 
@@ -33,6 +34,7 @@ export const initCommand = new Command('init')
           migrations.push(createVectorDimensionsMigration(dimensions));
         }
         migrations.push(pathIndexMigration);
+        migrations.push(metadataIndexesMigration);
 
         await runMigrations(sql, migrations);
         console.log('База данных успешно инициализирована.');

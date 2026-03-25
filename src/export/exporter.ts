@@ -11,6 +11,17 @@ import type { Manifest, ManifestSource } from './manifest.js';
 // Размер батча для чтения чанков из БД.
 const CHUNK_BATCH_SIZE = 1000;
 
+// Строка чанка при экспорте.
+interface ExportChunkRow {
+  id: string;
+  source_id: string;
+  content: string;
+  content_hash: string;
+  metadata: Record<string, unknown>;
+  embedding: number[] | null;
+  created_at: Date;
+}
+
 export interface ExportOptions {
   sql: postgres.Sql;
   sourceIds: string[];
@@ -125,10 +136,11 @@ export async function exportData(options: ExportOptions): Promise<ExportResult> 
       });
       await appendFile(sqlFilePath, `-- Source record\n${sourceInsert}\n\n`, 'utf-8');
 
-      // Чанки батчами.
-      let offset = 0;
+      // Чанки батчами (keyset pagination по (created_at, id) — стабильнее OFFSET для крупных таблиц).
       let sourceChunks = 0;
       let hasEmbeddings = false;
+      let cursorCreatedAt: Date | null = null;
+      let cursorId: string | null = null;
 
       // Подсчёт общего количества чанков.
       const [countResult] = await sql<[{ count: string }]>`
@@ -139,24 +151,32 @@ export async function exportData(options: ExportOptions): Promise<ExportResult> 
       await appendFile(sqlFilePath, `-- Chunks (${totalSourceChunks} records)\n`, 'utf-8');
 
       while (true) {
-        const chunks = await sql<Array<{
-          id: string;
-          source_id: string;
-          content: string;
-          content_hash: string;
-          metadata: Record<string, unknown>;
-          embedding: number[] | null;
-          created_at: Date;
-        }>>`
-          SELECT id, source_id, content, content_hash, metadata, embedding, created_at
-          FROM chunks
-          WHERE source_id = ${sourceId}
-          ORDER BY created_at
-          LIMIT ${CHUNK_BATCH_SIZE}
-          OFFSET ${offset}
-        `;
+        // Keyset pagination: используем >= для created_at и исключаем уже обработанный cursorId,
+        // чтобы не пропустить строки с одинаковым created_at но меньшим UUID.
+        const chunks: ExportChunkRow[] = cursorCreatedAt && cursorId
+          ? await sql<ExportChunkRow[]>`
+              SELECT id, source_id, content, content_hash, metadata, embedding, created_at
+              FROM chunks
+              WHERE source_id = ${sourceId}
+                AND (created_at > ${cursorCreatedAt}
+                  OR (created_at = ${cursorCreatedAt} AND id > ${cursorId}))
+              ORDER BY created_at, id
+              LIMIT ${CHUNK_BATCH_SIZE}
+            `
+          : await sql<ExportChunkRow[]>`
+              SELECT id, source_id, content, content_hash, metadata, embedding, created_at
+              FROM chunks
+              WHERE source_id = ${sourceId}
+              ORDER BY created_at, id
+              LIMIT ${CHUNK_BATCH_SIZE}
+            `;
 
         if (chunks.length === 0) break;
+
+        // Обновляем курсор на последний элемент.
+        const lastChunk = chunks[chunks.length - 1]!;
+        cursorCreatedAt = lastChunk.created_at;
+        cursorId = lastChunk.id;
 
         for (const chunk of chunks) {
           if (chunk.embedding && chunk.embedding.length > 0) {
@@ -176,7 +196,6 @@ export async function exportData(options: ExportOptions): Promise<ExportResult> 
         }
 
         sourceChunks += chunks.length;
-        offset += CHUNK_BATCH_SIZE;
         onProgress?.(source.name, sourceChunks, totalSourceChunks);
       }
 
