@@ -1,12 +1,16 @@
 import type { Reranker, RerankDocument, RerankResult } from './types.js';
 import { fetchWithRetry } from '../../utils/retry.js';
 
+// Формат документов в запросе: объекты {text} (Jina) или строки (SiliconFlow).
+type DocumentFormat = 'object' | 'string';
+
 // Конфигурация Jina-совместимого Reranker.
 interface JinaRerankerConfig {
   apiKey: string;
   model: string;
   baseUrl?: string;
   providerName?: string;
+  documentFormat?: DocumentFormat;
 }
 
 // Структура одного результата в ответе Jina Reranker API.
@@ -30,12 +34,14 @@ export class JinaReranker implements Reranker {
   private readonly model: string;
   private readonly baseUrl: string;
   private readonly providerName: string;
+  private readonly documentFormat: DocumentFormat;
 
   constructor(config: JinaRerankerConfig) {
     this.apiKey = config.apiKey;
     this.model = config.model;
     this.baseUrl = config.baseUrl ?? DEFAULT_BASE_URL;
     this.providerName = config.providerName ?? 'Jina Reranker API';
+    this.documentFormat = config.documentFormat ?? 'object';
   }
 
   // Переранжирует документы по релевантности запросу.
@@ -48,10 +54,14 @@ export class JinaReranker implements Reranker {
       return [];
     }
 
+    const docs = this.documentFormat === 'string'
+      ? documents.map((d) => d.content)
+      : documents.map((d) => ({ text: d.content }));
+
     const body = JSON.stringify({
       model: this.model,
       query,
-      documents: documents.map((d) => ({ text: d.content })),
+      documents: docs,
       top_n: topK,
     });
 

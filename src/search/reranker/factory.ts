@@ -24,6 +24,7 @@ export function createReranker(config: RerankerConfig): Reranker {
       model: config.siliconflow.model,
       baseUrl: 'https://api.siliconflow.com/v1/rerank',
       providerName: 'SiliconFlow Reranker API',
+      documentFormat: 'string',
     });
   }
   case 'none':
