@@ -54,7 +54,7 @@ Query -> embed -> parallel [BM25 (tsvector, top 50), Vector (pgvector cosine, to
 | MCP | @modelcontextprotocol/sdk (stdio) |
 | CLI | Commander |
 | Конфиг | YAML + Zod-валидация |
-| Тесты | Vitest (336 тестов) |
+| Тесты | Vitest (381 тест) |
 
 ## See Also
 

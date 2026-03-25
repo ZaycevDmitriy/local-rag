@@ -35,8 +35,9 @@ src/
     reranker/           # Reranker interface, Jina/Noop implementations, factory
   sources/              # File scanning, .gitignore/.ragignore filtering, git clone/pull
   storage/              # PostgreSQL: schema, migrations, CRUD for chunks/sources/indexed-files
-    migrations/         # SQL migrations (001_initial, 002_vector_dimensions, 003_path_index)
-tests/                  # Vitest tests (~336 tests)
+    migrations/         # SQL migrations (001-004: initial, vector_dims, path_index, metadata_indexes)
+  utils/                # Утилиты: retry с backoff, concurrency limiter
+tests/                  # Vitest tests (381 tests)
 ```
 
 ## Key Entry Points

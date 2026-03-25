@@ -47,6 +47,10 @@ typecheck: ## Проверка типов TypeScript
 test: ## Запуск тестов
 	npm test
 
+.PHONY: test-watch
+test-watch: ## Тесты в watch-режиме
+	npx vitest
+
 .PHONY: ci
 ci: lint typecheck test build ## Полная проверка (lint + types + test + build)
 
@@ -86,6 +90,16 @@ status: ## Статус системы
 .PHONY: list
 list: ## Список источников
 	npx tsx src/cli.ts list
+
+##@ Export / Import
+
+.PHONY: export-all
+export-all: ## Экспорт всех источников в архив
+	npx tsx src/cli.ts export --all
+
+.PHONY: re-embed
+re-embed: ## Перегенерация эмбеддингов для NULL чанков
+	npx tsx src/cli.ts re-embed
 
 ##@ Разработка
 

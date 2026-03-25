@@ -140,10 +140,12 @@ export async function importData(options: ImportOptions): Promise<ImportResult> 
         // Remap путей.
         if (remapPath) {
           await query.unsafe(
-            `UPDATE sources SET path = REPLACE(path, '${remapPath.from.replace(/'/g, '\'\'')}', '${remapPath.to.replace(/'/g, '\'\'')}') WHERE name = '${manifestSource.name.replace(/'/g, '\'\'')}'`,
+            'UPDATE sources SET path = REPLACE(path, $1, $2) WHERE name = $3',
+            [remapPath.from, remapPath.to, manifestSource.name],
           );
           await query.unsafe(
-            `UPDATE chunks SET metadata = jsonb_set(metadata, '{path}', to_jsonb(REPLACE(metadata->>'path', '${remapPath.from.replace(/'/g, '\'\'')}', '${remapPath.to.replace(/'/g, '\'\'')}'))) WHERE source_id = (SELECT id FROM sources WHERE name = '${manifestSource.name.replace(/'/g, '\'\'')}')`,
+            'UPDATE chunks SET metadata = jsonb_set(metadata, \'{path}\', to_jsonb(REPLACE(metadata->>\'path\', $1, $2))) WHERE source_id = (SELECT id FROM sources WHERE name = $3)',
+            [remapPath.from, remapPath.to, manifestSource.name],
           );
         }
       });

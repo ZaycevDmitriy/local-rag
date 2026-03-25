@@ -40,10 +40,11 @@ src/
     reranker/               # Jina, Noop, factory
   sources/                  # FileFilter, scanLocalFiles, Git clone/pull
   storage/                  # PostgreSQL: schema, migrator, CRUD
-    migrations/             # SQL-миграции
+    migrations/             # SQL-миграции (001-004)
   indexer/                  # Indexer, incremental, progress
   mcp/                      # MCP server + tools
     tools/                  # search, read_source, list_sources, status
+  utils/                    # retry с backoff, concurrency limiter
 ```
 
 ## See Also
