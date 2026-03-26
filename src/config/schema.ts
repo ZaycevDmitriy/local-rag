@@ -32,7 +32,7 @@ export const SiliconFlowEmbeddingsSchema = z.object({
 
 // Схема конфигурации эмбеддингов.
 export const EmbeddingsConfigSchema = z.object({
-  provider: z.enum(['jina', 'openai', 'siliconflow', 'self-hosted']).default('jina'),
+  provider: z.enum(['jina', 'openai', 'siliconflow']).default('jina'),
   jina: JinaEmbeddingsSchema.optional(),
   openai: OpenAIEmbeddingsSchema.optional(),
   siliconflow: SiliconFlowEmbeddingsSchema.optional(),

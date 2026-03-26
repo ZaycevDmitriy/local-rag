@@ -123,7 +123,7 @@ export const exportCommand = new Command('export')
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      console.error(`Ошибка: ${message}`);
+      console.error(`Ошибка команды rag export: ${message}`);
       process.exit(1);
     }
   });

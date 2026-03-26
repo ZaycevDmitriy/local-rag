@@ -19,7 +19,7 @@ export function createVectorDimensionsMigration(dimensions: number): Migration {
 
       // Пересоздаём HNSW-индекс.
       await sql`
-        CREATE INDEX idx_chunks_embedding ON chunks
+        CREATE INDEX IF NOT EXISTS idx_chunks_embedding ON chunks
           USING hnsw (embedding vector_cosine_ops)
           WITH (m = 16, ef_construction = 200)
       `;

@@ -1,7 +1,7 @@
 // Обнаружение изменённых файлов для инкрементальной индексации.
 import { createHash } from 'node:crypto';
-import type { IndexedFileStorage } from '../storage/indexed-files.js';
-import type { ScannedFile } from '../sources/local.js';
+import type { IndexedFileStorage } from '../storage/index.js';
+import type { ScannedFile } from '../sources/index.js';
 
 // Описание изменённого файла.
 export interface FileChange {

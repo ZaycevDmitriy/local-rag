@@ -1,8 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import { createHash } from 'node:crypto';
 import { detectChanges } from '../incremental.js';
-import type { IndexedFileStorage } from '../../storage/indexed-files.js';
-import type { ScannedFile } from '../../sources/local.js';
+import type { IndexedFileStorage } from '../../storage/index.js';
+import type { ScannedFile } from '../../sources/index.js';
 
 // Вычисляет SHA-256 хэш строки (дублируем для тестов).
 function sha256(content: string): string {

@@ -127,6 +127,7 @@ describe('AppConfigSchema', () => {
     expect(config.indexing.chunkSize.maxTokens).toBe(1000);
     expect(config.indexing.chunkSize.overlap).toBe(100);
     expect(config.indexing.git.cloneDir).toBe('~/.local/share/rag/repos');
+    expect(config.indexing.strictAst).toBe(false);
   });
 
   it('выбрасывает ошибку при невалидном provider', () => {
@@ -176,6 +177,36 @@ describe('AppConfigSchema', () => {
     expect(config.sources[0]!.type).toBe('local');
     expect(config.sources[1]!.type).toBe('git');
     expect(config.sources[1]!.branch).toBe('main');
+  });
+
+  it('парсит конфиг с провайдерами siliconflow и strictAst', () => {
+    const config = AppConfigSchema.parse({
+      embeddings: {
+        provider: 'siliconflow',
+        siliconflow: {
+          apiKey: 'sf-key',
+          model: 'Qwen/Qwen3-Embedding-0.6B',
+          dimensions: 1024,
+        },
+      },
+      reranker: {
+        provider: 'siliconflow',
+        siliconflow: {
+          apiKey: 'sf-key',
+          model: 'Qwen/Qwen3-Reranker-0.6B',
+          topK: 5,
+        },
+      },
+      indexing: {
+        strictAst: true,
+      },
+    });
+
+    expect(config.embeddings.provider).toBe('siliconflow');
+    expect(config.embeddings.siliconflow?.apiKey).toBe('sf-key');
+    expect(config.reranker.provider).toBe('siliconflow');
+    expect(config.reranker.siliconflow?.topK).toBe(5);
+    expect(config.indexing.strictAst).toBe(true);
   });
 });
 

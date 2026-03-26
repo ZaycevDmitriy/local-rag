@@ -1,11 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { SearchCoordinator } from '../coordinator.js';
-import type { SearchConfig } from '../../config/schema.js';
-import type { TextEmbedder } from '../../embeddings/types.js';
-import type { ChunkStorage } from '../../storage/chunks.js';
-import type { SourceStorage } from '../../storage/sources.js';
-import type { SourceRow } from '../../storage/schema.js';
-import type { ChunkRow } from '../../storage/schema.js';
+import type { SearchConfig } from '../../config/index.js';
+import type { TextEmbedder } from '../../embeddings/index.js';
+import type { ChunkRow, ChunkStorage, SourceRow, SourceStorage } from '../../storage/index.js';
 import type { Reranker } from '../reranker/types.js';
 
 // Фабрика мок-source.

@@ -1,5 +1,5 @@
 import type { TextEmbedder } from './types.js';
-import { fetchWithRetry } from '../utils/retry.js';
+import { fetchWithRetry } from '../utils/index.js';
 
 // Конфигурация Jina Embeddings.
 interface JinaConfig {

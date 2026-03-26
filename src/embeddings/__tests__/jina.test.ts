@@ -332,10 +332,4 @@ describe('createTextEmbedder', () => {
     });
     expect(embedder).toBeInstanceOf(OpenAITextEmbedder);
   });
-
-  it('выбрасывает ошибку для провайдера self-hosted (ещё не реализован)', () => {
-    expect(() =>
-      createTextEmbedder({ provider: 'self-hosted' }),
-    ).toThrow('Self-hosted embedder not implemented yet');
-  });
 });

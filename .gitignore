@@ -20,3 +20,12 @@ rag.config.yaml
 .agents/
 skills-lock.json
 .playwright-mcp
+
+# Локальные рабочие директории и артефакты инструментов
+.agent/
+.codex/
+.cursor/
+.opencode/
+coverage/
+docs/ai-factory-workflow.md
+opencode.json

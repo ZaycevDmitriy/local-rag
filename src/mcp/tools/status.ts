@@ -1,9 +1,8 @@
 // MCP-инструмент status — состояние системы local-rag.
 import type postgres from 'postgres';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import type { AppConfig } from '../../config/schema.js';
-import { isTreeSitterSupported } from '../../chunks/code/languages.js';
-import { getAppliedMigrations } from '../../storage/index.js';
+import type { AppConfig } from '../../config/index.js';
+import { getSystemStatusSnapshot } from '../../status/index.js';
 
 // Регистрирует инструмент status на MCP-сервере.
 export function registerStatusTool(
@@ -20,54 +19,32 @@ export function registerStatusTool(
     },
     async () => {
       try {
-        // Проверяем подключение к БД и получаем статистику.
-        const [sourcesResult, chunksResult, lastIndexedResult, appliedMigrations] = await Promise.all([
-          sql<Array<{ count: string }>>`SELECT COUNT(*)::text AS count FROM sources`,
-          sql<Array<{ count: string }>>`SELECT COUNT(*)::text AS count FROM chunks`,
-          sql<Array<{ last_indexed_at: Date | null }>>`
-            SELECT MAX(last_indexed_at) AS last_indexed_at FROM sources
-          `,
-          getAppliedMigrations(sql),
-        ]);
-
-        const sourceCount = parseInt(sourcesResult[0]!.count, 10);
-        const chunkCount = parseInt(chunksResult[0]!.count, 10);
-        const lastIndexedAt = lastIndexedResult[0]?.last_indexed_at;
-        const schemaVersion = appliedMigrations.at(-1) ?? null;
+        const snapshot = await getSystemStatusSnapshot(sql, config);
+        const schemaVersion = snapshot.appliedMigrations.at(-1) ?? null;
 
         const status = {
           database: {
             connected: true,
             schemaVersion,
-            totalSources: sourceCount,
-            totalChunks: chunkCount,
+            totalSources: snapshot.sourceCount,
+            totalChunks: snapshot.chunkCount,
           },
           providers: {
             embeddings: {
-              provider: config.embeddings.provider,
+              provider: snapshot.embeddingsProvider,
               configured: true,
             },
             reranker: {
-              provider: config.reranker.provider,
+              provider: snapshot.rerankerProvider,
               configured: true,
             },
           },
           indexing: {
             active: false,
-            lastIndexedAt: lastIndexedAt?.toISOString() ?? null,
+            lastIndexedAt: snapshot.lastIndexedAt,
           },
-          search: {
-            bm25Weight: config.search.bm25Weight,
-            vectorWeight: config.search.vectorWeight,
-            finalTopK: config.search.finalTopK,
-            retrieveTopK: config.search.retrieveTopK,
-          },
-          treeSitterLanguages: {
-            typescript: 'active',
-            javascript: 'active',
-            java: isTreeSitterSupported('Test.java') ? 'active' : 'fallback',
-            kotlin: isTreeSitterSupported('Test.kt') ? 'active' : 'fallback',
-          },
+          search: snapshot.search,
+          treeSitterLanguages: snapshot.treeSitterLanguages,
         };
 
         return {

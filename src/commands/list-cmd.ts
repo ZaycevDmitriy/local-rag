@@ -58,7 +58,7 @@ export const listCommand = new Command('list')
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      console.error(`Ошибка: ${message}`);
+      console.error(`Ошибка команды rag list: ${message}`);
       process.exit(1);
     }
   });

@@ -14,3 +14,4 @@ export { FixedSizeChunker } from './text/fixed-chunker.js';
 export { ChunkDispatcher } from './dispatcher.js';
 export { TreeSitterChunker } from './code/tree-sitter-chunker.js';
 export { FallbackChunker } from './code/fallback-chunker.js';
+export { isTreeSitterSupported, setStrictAst } from './code/languages.js';

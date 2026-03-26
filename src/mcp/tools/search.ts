@@ -1,7 +1,7 @@
 // MCP-инструмент search — гибридный семантический поиск.
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import type { SearchCoordinator } from '../../search/coordinator.js';
+import type { SearchCoordinator } from '../../search/index.js';
 
 // Регистрирует инструмент search на MCP-сервере.
 export function registerSearchTool(server: McpServer, coordinator: SearchCoordinator): void {

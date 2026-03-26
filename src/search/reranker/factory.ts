@@ -1,4 +1,4 @@
-import type { RerankerConfig } from '../../config/schema.js';
+import type { RerankerConfig } from '../../config/index.js';
 import type { Reranker } from './types.js';
 import { JinaReranker } from './jina.js';
 import { NoopReranker } from './noop.js';

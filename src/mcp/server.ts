@@ -2,12 +2,10 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import type postgres from 'postgres';
-import type { AppConfig } from '../config/schema.js';
-import { ChunkStorage } from '../storage/chunks.js';
-import { SourceStorage } from '../storage/sources.js';
-import { createTextEmbedder } from '../embeddings/factory.js';
-import { createReranker } from '../search/reranker/factory.js';
-import { SearchCoordinator } from '../search/coordinator.js';
+import type { AppConfig } from '../config/index.js';
+import { createTextEmbedder } from '../embeddings/index.js';
+import { createReranker, SearchCoordinator } from '../search/index.js';
+import { ChunkStorage, SourceStorage } from '../storage/index.js';
 import { registerSearchTool } from './tools/search.js';
 import { registerReadSourceTool } from './tools/read-source.js';
 import { registerListSourcesTool } from './tools/list-sources.js';
