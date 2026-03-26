@@ -148,7 +148,7 @@ export const importCommand = new Command('import')
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      console.error(`Ошибка: ${message}`);
+      console.error(`Ошибка команды rag import для файла "${file}": ${message}`);
       process.exit(1);
     }
   });

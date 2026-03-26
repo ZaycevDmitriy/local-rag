@@ -1,5 +1,5 @@
 import type { Reranker, RerankDocument, RerankResult } from './types.js';
-import { fetchWithRetry } from '../../utils/retry.js';
+import { fetchWithRetry } from '../../utils/index.js';
 
 // Формат документов в запросе: объекты {text} (Jina) или строки (SiliconFlow).
 type DocumentFormat = 'object' | 'string';

@@ -1,13 +1,9 @@
 // Оркестрация индексации: chunk -> embed -> store с инкрементальной поддержкой.
-import type { ChunkDispatcher } from '../chunks/index.js';
-import type { FileContent } from '../chunks/types.js';
-import type { TextEmbedder } from '../embeddings/types.js';
-import type { ChunkStorage } from '../storage/chunks.js';
-import type { IndexedFileStorage } from '../storage/indexed-files.js';
-import type { SourceStorage } from '../storage/sources.js';
-import type { SourceRow } from '../storage/schema.js';
-import type { ScannedFile } from '../sources/local.js';
-import { pMap } from '../utils/concurrency.js';
+import type { ChunkDispatcher, FileContent } from '../chunks/index.js';
+import type { TextEmbedder } from '../embeddings/index.js';
+import type { ChunkStorage, IndexedFileStorage, SourceRow, SourceStorage } from '../storage/index.js';
+import type { ScannedFile } from '../sources/index.js';
+import { pMap } from '../utils/index.js';
 import { detectChanges } from './incremental.js';
 import type { IndexResult, ProgressReporter } from './progress.js';
 

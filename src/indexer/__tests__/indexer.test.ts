@@ -1,14 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Indexer } from '../indexer.js';
-import type { ChunkStorage } from '../../storage/chunks.js';
-import type { SourceStorage } from '../../storage/sources.js';
-import type { IndexedFileStorage } from '../../storage/indexed-files.js';
-import type { TextEmbedder } from '../../embeddings/types.js';
 import type { ChunkDispatcher } from '../../chunks/index.js';
+import type { TextEmbedder } from '../../embeddings/index.js';
+import type { IndexedFileStorage, ChunkStorage, SourceRow, SourceStorage } from '../../storage/index.js';
 import type { ProgressReporter } from '../progress.js';
 import type { ChangeDetectionResult } from '../incremental.js';
-import type { SourceRow } from '../../storage/schema.js';
-import type { ScannedFile } from '../../sources/local.js';
+import type { ScannedFile } from '../../sources/index.js';
 
 // Мок detectChanges.
 vi.mock('../incremental.js', () => ({

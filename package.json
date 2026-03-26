@@ -11,6 +11,7 @@
     "dev": "tsx src/cli.ts",
     "lint": "eslint src/",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "typesCheck": "tsc --noEmit"
   },
   "engines": {
@@ -38,6 +39,7 @@
     "@types/tar": "^6.1.13",
     "@typescript-eslint/eslint-plugin": "^8.56.1",
     "@typescript-eslint/parser": "^8.56.1",
+    "@vitest/coverage-v8": "^4.1.1",
     "eslint": "^10.0.2",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",

@@ -34,7 +34,7 @@ export const removeCommand = new Command('remove')
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      console.error(`Ошибка: ${message}`);
+      console.error(`Ошибка команды rag remove для источника "${name}": ${message}`);
       process.exit(1);
     }
   });

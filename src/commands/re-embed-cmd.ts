@@ -85,7 +85,7 @@ export const reEmbedCommand = new Command('re-embed')
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      console.error(`Ошибка: ${message}`);
+      console.error(`Ошибка команды rag re-embed${options.source ? ` для источника "${options.source}"` : ''}: ${message}`);
       process.exit(1);
     }
   });

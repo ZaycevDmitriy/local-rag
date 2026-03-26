@@ -2,8 +2,8 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { z } from 'zod';
-import { getAppliedMigrations } from '../storage/migrator.js';
 import type postgres from 'postgres';
+import { getAppliedMigrations } from '../storage/index.js';
 
 // Zod-схема источника в манифесте.
 const ManifestSourceSchema = z.object({

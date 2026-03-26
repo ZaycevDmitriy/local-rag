@@ -1,9 +1,7 @@
 // Координатор поиска — оркестрирует BM25 + vector + RRF + rerank pipeline.
-import type { SearchConfig } from '../config/schema.js';
-import type { TextEmbedder } from '../embeddings/types.js';
-import type { ChunkStorage } from '../storage/chunks.js';
-import type { SourceStorage } from '../storage/sources.js';
-import type { SourceRow } from '../storage/schema.js';
+import type { SearchConfig } from '../config/index.js';
+import type { TextEmbedder } from '../embeddings/index.js';
+import type { ChunkStorage, SourceRow, SourceStorage } from '../storage/index.js';
 import { rrfFuse } from './hybrid.js';
 import type { Reranker } from './reranker/types.js';
 import type { SearchQuery, SearchResponse, SearchResult } from './types.js';

@@ -7,10 +7,11 @@ const migration: Migration = {
   async up(sql) {
     // Подключаем расширение pgvector.
     await sql`CREATE EXTENSION IF NOT EXISTS vector`;
+    await sql`CREATE EXTENSION IF NOT EXISTS pgcrypto`;
 
     // Таблица источников данных.
     await sql`
-      CREATE TABLE sources (
+      CREATE TABLE IF NOT EXISTS sources (
         id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         name          TEXT NOT NULL UNIQUE,
         type          TEXT NOT NULL,
@@ -27,7 +28,7 @@ const migration: Migration = {
 
     // Таблица фрагментов с эмбеддингами и полнотекстовым поиском.
     await sql`
-      CREATE TABLE chunks (
+      CREATE TABLE IF NOT EXISTS chunks (
         id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         source_id     UUID NOT NULL REFERENCES sources(id) ON DELETE CASCADE,
         content       TEXT NOT NULL,
@@ -41,18 +42,18 @@ const migration: Migration = {
     `;
 
     // Индексы для таблицы chunks.
-    await sql`CREATE INDEX idx_chunks_source ON chunks(source_id)`;
-    await sql`CREATE INDEX idx_chunks_hash ON chunks(source_id, content_hash)`;
+    await sql`CREATE INDEX IF NOT EXISTS idx_chunks_source ON chunks(source_id)`;
+    await sql`CREATE INDEX IF NOT EXISTS idx_chunks_hash ON chunks(source_id, content_hash)`;
     await sql`
-      CREATE INDEX idx_chunks_embedding ON chunks
+      CREATE INDEX IF NOT EXISTS idx_chunks_embedding ON chunks
         USING hnsw (embedding vector_cosine_ops)
         WITH (m = 16, ef_construction = 200)
     `;
-    await sql`CREATE INDEX idx_chunks_fts ON chunks USING GIN (search_vector)`;
+    await sql`CREATE INDEX IF NOT EXISTS idx_chunks_fts ON chunks USING GIN (search_vector)`;
 
     // Таблица хэшей файлов для инкрементальной индексации.
     await sql`
-      CREATE TABLE indexed_files (
+      CREATE TABLE IF NOT EXISTS indexed_files (
         id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         source_id   UUID NOT NULL REFERENCES sources(id) ON DELETE CASCADE,
         path        TEXT NOT NULL,

@@ -2,7 +2,7 @@
 import pgvector from 'pgvector';
 import type postgres from 'postgres';
 import type { ChunkRow } from './schema.js';
-import type { ChunkMetadata } from '../chunks/types.js';
+import type { ChunkMetadata } from '../chunks/index.js';
 
 // Размер пачки для batch-вставки.
 const BATCH_SIZE = 100;

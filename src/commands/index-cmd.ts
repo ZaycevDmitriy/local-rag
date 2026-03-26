@@ -1,14 +1,10 @@
 // Команда rag index — индексация источников.
-import { Command } from 'commander';
-import { resolve } from 'node:path';
 import { loadConfig } from '../config/index.js';
-import type { SourceConfig } from '../config/schema.js';
-import { createDb, closeDb, SourceStorage, ChunkStorage, IndexedFileStorage } from '../storage/index.js';
-import { createTextEmbedder } from '../embeddings/index.js';
-import { ChunkDispatcher, MarkdownChunker, FixedSizeChunker, TreeSitterChunker, FallbackChunker } from '../chunks/index.js';
-import { setStrictAst } from '../chunks/code/languages.js';
-import { scanLocalFiles, cloneOrPull } from '../sources/index.js';
-import { Indexer, ConsoleProgress } from '../indexer/index.js';
+import { Command } from 'commander';
+import type { SourceConfig } from '../config/index.js';
+import { setStrictAst } from '../chunks/index.js';
+import { closeDb, createDb } from '../storage/index.js';
+import { createIndexerRuntime, indexSourceFromConfig } from '../indexer/index.js';
 
 // Параметры команды index.
 interface IndexOptions {
@@ -20,90 +16,12 @@ interface IndexOptions {
   branch?: string;
 }
 
-// Создаёт ChunkDispatcher из конфигурации.
-function createDispatcher(chunkSize: { maxTokens: number; overlap: number }): ChunkDispatcher {
-  const treeSitterChunker = new TreeSitterChunker(chunkSize);
-  const fallbackChunker = new FallbackChunker(chunkSize);
-  const markdownChunker = new MarkdownChunker(chunkSize);
-  const fixedChunker = new FixedSizeChunker(chunkSize);
-  return new ChunkDispatcher([treeSitterChunker, fallbackChunker, markdownChunker], fixedChunker);
-}
-
-// Индексирует один источник.
-async function indexSource(
-  sourceConfig: SourceConfig,
-  sourceStorage: SourceStorage,
-  indexer: Indexer,
-  progress: ConsoleProgress,
-  cloneDir: string,
-): Promise<void> {
+function logIndexStart(sourceConfig: SourceConfig): void {
   console.log(`\nИндексация: ${sourceConfig.name}`);
-
-  if (sourceConfig.type === 'git') {
-    const url = sourceConfig.url;
-    if (!url) {
-      console.error(`  Ошибка: URL не указан для git-источника "${sourceConfig.name}".`);
-      return;
-    }
-
+  if (sourceConfig.type === 'git' && sourceConfig.url) {
     const branch = sourceConfig.branch ?? 'main';
-
-    // Клонируем или обновляем репозиторий.
-    console.log(`  Клонирование/обновление: ${url} (ветка: ${branch})`);
-    const { localPath } = await cloneOrPull(url, branch, cloneDir);
-
-    // Upsert источника в БД.
-    const source = await sourceStorage.upsert({
-      name: sourceConfig.name,
-      type: 'git',
-      path: localPath,
-      gitUrl: url,
-      gitBranch: branch,
-      config: {
-        include: sourceConfig.include,
-        exclude: sourceConfig.exclude,
-      },
-    });
-
-    // Сканируем файлы из локальной копии.
-    const { files, excludedCount } = await scanLocalFiles(localPath, {
-      include: sourceConfig.include,
-      exclude: sourceConfig.exclude,
-    });
-    progress.onScanComplete(files.length, excludedCount);
-
-    // Запускаем индексацию.
-    await indexer.indexSource(source, files);
-    return;
+    console.log(`  Клонирование/обновление: ${sourceConfig.url} (ветка: ${branch})`);
   }
-
-  if (!sourceConfig.path) {
-    console.error(`  Ошибка: путь не указан для источника "${sourceConfig.name}".`);
-    return;
-  }
-
-  const resolvedPath = resolve(sourceConfig.path);
-
-  // Upsert источника в БД.
-  const source = await sourceStorage.upsert({
-    name: sourceConfig.name,
-    type: sourceConfig.type,
-    path: resolvedPath,
-    config: {
-      include: sourceConfig.include,
-      exclude: sourceConfig.exclude,
-    },
-  });
-
-  // Сканируем файлы.
-  const { files, excludedCount } = await scanLocalFiles(resolvedPath, {
-    include: sourceConfig.include,
-    exclude: sourceConfig.exclude,
-  });
-  progress.onScanComplete(files.length, excludedCount);
-
-  // Запускаем индексацию.
-  await indexer.indexSource(source, files);
 }
 
 export const indexCommand = new Command('index')
@@ -122,21 +40,7 @@ export const indexCommand = new Command('index')
       const sql = createDb(config.database);
 
       try {
-        const sourceStorage = new SourceStorage(sql);
-        const chunkStorage = new ChunkStorage(sql);
-        const indexedFileStorage = new IndexedFileStorage(sql);
-        const embedder = createTextEmbedder(config.embeddings);
-        const dispatcher = createDispatcher(config.indexing.chunkSize);
-        const progress = new ConsoleProgress();
-        const indexer = new Indexer(
-          chunkStorage,
-          sourceStorage,
-          embedder,
-          dispatcher,
-          progress,
-          indexedFileStorage,
-        );
-        const cloneDir = config.indexing.git.cloneDir;
+        const runtime = createIndexerRuntime(sql, config);
 
         if (options.all) {
           // Индексируем все источники из конфига.
@@ -151,7 +55,8 @@ export const indexCommand = new Command('index')
 
           for (const sourceConfig of config.sources) {
             try {
-              await indexSource(sourceConfig, sourceStorage, indexer, progress, cloneDir);
+              logIndexStart(sourceConfig);
+              await indexSourceFromConfig(sourceConfig, runtime);
               okCount++;
             } catch (err) {
               const msg = err instanceof Error ? err.message : String(err);
@@ -179,7 +84,8 @@ export const indexCommand = new Command('index')
             url: options.git,
             branch: options.branch,
           };
-          await indexSource(sourceConfig, sourceStorage, indexer, progress, cloneDir);
+          logIndexStart(sourceConfig);
+          await indexSourceFromConfig(sourceConfig, runtime);
         } else if (options.path) {
           // Ad-hoc индексация: --path + --name.
           const sourceName = options.name ?? nameArg ?? 'adhoc';
@@ -188,7 +94,8 @@ export const indexCommand = new Command('index')
             type: 'local',
             path: options.path,
           };
-          await indexSource(sourceConfig, sourceStorage, indexer, progress, cloneDir);
+          logIndexStart(sourceConfig);
+          await indexSourceFromConfig(sourceConfig, runtime);
         } else if (nameArg) {
           // Индексация источника по имени из конфига.
           const sourceConfig = config.sources.find((s) => s.name === nameArg);
@@ -196,7 +103,8 @@ export const indexCommand = new Command('index')
             console.error(`Источник "${nameArg}" не найден в конфигурации.`);
             process.exit(1);
           }
-          await indexSource(sourceConfig, sourceStorage, indexer, progress, cloneDir);
+          logIndexStart(sourceConfig);
+          await indexSourceFromConfig(sourceConfig, runtime);
         } else {
           console.error('Укажите источник: rag index <name>, --path <dir>, --git <url> или --all');
           process.exit(1);

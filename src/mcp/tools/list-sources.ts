@@ -1,7 +1,7 @@
 // MCP-инструмент list_sources — список проиндексированных источников.
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import type { SourceStorage } from '../../storage/sources.js';
+import type { SourceStorage } from '../../storage/index.js';
 
 // Регистрирует инструмент list_sources на MCP-сервере.
 export function registerListSourcesTool(server: McpServer, sourceStorage: SourceStorage): void {

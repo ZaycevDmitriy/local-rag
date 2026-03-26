@@ -1,4 +1,4 @@
-import type { EmbeddingsConfig } from '../config/schema.js';
+import type { EmbeddingsConfig } from '../config/index.js';
 import type { TextEmbedder } from './types.js';
 import { JinaTextEmbedder } from './jina.js';
 import { OpenAITextEmbedder } from './openai.js';
@@ -38,8 +38,6 @@ export function createTextEmbedder(config: EmbeddingsConfig): TextEmbedder {
       providerName: 'SiliconFlow API',
     });
   }
-  case 'self-hosted':
-    throw new Error('Self-hosted embedder not implemented yet');
   default:
     throw new Error(`Unsupported embeddings provider: ${config.provider as string}`);
   }

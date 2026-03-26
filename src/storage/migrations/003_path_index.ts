@@ -8,7 +8,7 @@ const migration: Migration = {
     // Подключаем расширение pg_trgm для GIN-индекса по тексту.
     await sql`CREATE EXTENSION IF NOT EXISTS pg_trgm`;
     // Индекс по пути файла для быстрой фильтрации по префиксу.
-    await sql`CREATE INDEX idx_chunks_path ON chunks USING GIN ((metadata->>'path') gin_trgm_ops)`;
+    await sql`CREATE INDEX IF NOT EXISTS idx_chunks_path ON chunks USING GIN ((metadata->>'path') gin_trgm_ops)`;
   },
 };
 

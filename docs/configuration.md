@@ -13,14 +13,14 @@ database:
   password: rag
 
 embeddings:
-  provider: jina                    # jina | openai
+  provider: jina                    # jina | openai | siliconflow
   jina:
     apiKey: ${JINA_API_KEY}         # Подстановка переменных окружения
     model: jina-embeddings-v3
     dimensions: 1024
 
 reranker:
-  provider: jina                    # jina | none
+  provider: none                    # jina | siliconflow | none
   jina:
     apiKey: ${JINA_API_KEY}
     model: jina-reranker-v2-base-multilingual
@@ -52,6 +52,7 @@ indexing:
     overlap: 100                    # Перекрытие между чанками
   git:
     cloneDir: ~/.local/share/rag/repos  # Куда клонировать Git-репозитории
+  strictAst: false                  # Падать с ошибкой, если tree-sitter грамматика недоступна
 ```
 
 ## Путь к конфигу
@@ -93,6 +94,22 @@ indexing:
 |-----------|---------------------|-------------|------------|
 | `jina` | `jina-embeddings-v3` | 1024 | `JINA_API_KEY` |
 | `openai` | `text-embedding-3-small` | 1536 | `OPENAI_API_KEY` |
+| `siliconflow` | `Qwen/Qwen3-Embedding-0.6B` | 1024 | `SILICONFLOW_API_KEY` |
+
+## Провайдеры реранкера
+
+| Провайдер | Модель по умолчанию | Нужен ключ |
+|-----------|---------------------|------------|
+| `jina` | `jina-reranker-v2-base-multilingual` | `JINA_API_KEY` |
+| `siliconflow` | `Qwen/Qwen3-Reranker-0.6B` | `SILICONFLOW_API_KEY` |
+| `none` | — | нет |
+
+## Strict AST
+
+`indexing.strictAst` управляет поведением при отсутствии optional tree-sitter грамматик:
+
+- `false` — используется graceful degradation, файл обрабатывается fallback chunker
+- `true` — индексация завершается ошибкой, если нужная грамматика не установлена
 
 ## Фильтрация файлов
 

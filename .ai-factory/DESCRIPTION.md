@@ -11,15 +11,15 @@ Personal semantic search system for code and documentation. Indexes local direct
 - MCP stdio server with 4 tools (search, read_source, list_sources, status)
 - CLI with 8 commands (init, index, list, remove, status, export, import, re-embed)
 - Export/import for backup and data transfer (tar.gz archives + SQL)
-- Multi-provider embeddings (Jina, OpenAI, self-hosted)
+- Multi-provider embeddings (Jina, OpenAI, SiliconFlow)
 - .gitignore/.ragignore file filtering
 
 ## Tech Stack
 - **Language:** TypeScript (ESM, strict mode)
 - **Runtime:** Node.js >= 18
 - **Database:** PostgreSQL with pgvector extension
-- **Embeddings:** Jina Embeddings v3 (1024d), OpenAI as alternative
-- **Reranking:** Jina Reranker v2
+- **Embeddings:** Jina Embeddings v3 (1024d), OpenAI and SiliconFlow as alternatives
+- **Reranking:** Jina Reranker v2, SiliconFlow as alternative
 - **AST Parsing:** tree-sitter (TS/JS/Java/Kotlin)
 - **MCP:** @modelcontextprotocol/sdk (stdio transport)
 - **CLI:** Commander.js

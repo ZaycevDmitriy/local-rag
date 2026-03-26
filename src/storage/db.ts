@@ -1,6 +1,6 @@
 // Модуль подключения к PostgreSQL.
 import postgres from 'postgres';
-import type { DatabaseConfig } from '../config/schema.js';
+import type { DatabaseConfig } from '../config/index.js';
 
 // Создает подключение к PostgreSQL по конфигурации.
 export function createDb(config: DatabaseConfig): postgres.Sql {

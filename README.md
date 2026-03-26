@@ -10,7 +10,7 @@
 - **AST-aware chunking** — tree-sitter разбивает код на семантические блоки (функции, классы, методы)
 - **Инкрементальная индексация** — SHA-256 хэши, переиндексируются только изменённые файлы
 - **MCP-сервер** — 4 инструмента для AI-агентов: `search`, `read_source`, `list_sources`, `status`
-- **Переключаемые провайдеры** — Jina Embeddings v3, OpenAI, Jina Reranker v2
+- **Переключаемые провайдеры** — Jina, OpenAI, SiliconFlow для embeddings; Jina и SiliconFlow для rerank
 - **Export / Import** — портативный backup в `.tar.gz`, перенос данных, re-embed при смене провайдера
 
 ## Quick Start

@@ -2,8 +2,7 @@
 import { readFile } from 'node:fs/promises';
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import type { ChunkStorage } from '../../storage/chunks.js';
-import type { SourceStorage } from '../../storage/sources.js';
+import type { ChunkStorage, SourceStorage } from '../../storage/index.js';
 
 // Регистрирует инструмент read_source на MCP-сервере.
 export function registerReadSourceTool(
