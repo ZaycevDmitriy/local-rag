@@ -1,5 +1,7 @@
 # Local RAG
 
+[![CI](https://github.com/ZaycevDmitriy/local-rag/actions/workflows/ci.yml/badge.svg)](https://github.com/ZaycevDmitriy/local-rag/actions/workflows/ci.yml)
+
 > Персональная система семантического поиска по коду и документации.
 
 Индексирует локальные папки и Git-репозитории, предоставляет гибридный поиск (BM25 + vector + rerank) через MCP-интерфейс для AI-агентов — Claude Code, Cursor и других MCP-совместимых клиентов.
