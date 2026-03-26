@@ -35,6 +35,10 @@ jobs:
       - name: Verify lockfile is unchanged
         run: git diff --exit-code -- package-lock.json
 
+      - name: Install rolldown Linux binding
+        if: runner.os == 'Linux'
+        run: npm install --no-save --no-audit --no-fund @rolldown/binding-linux-x64-gnu@$(node -p "require('./package-lock.json').packages['node_modules/rolldown'].optionalDependencies['@rolldown/binding-linux-x64-gnu']")
+
       - name: Type check
         run: npm run typesCheck
 
