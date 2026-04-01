@@ -37,7 +37,7 @@ src/
   storage/              # PostgreSQL: schema, migrations, CRUD for chunks/sources/indexed-files
     migrations/         # SQL migrations (001-004: initial, vector_dims, path_index, metadata_indexes)
   utils/                # Утилиты: retry с backoff, concurrency limiter
-tests/                  # Vitest tests (381 tests)
+tests/                  # Vitest tests (400 tests)
 ```
 
 ## Key Entry Points
@@ -60,6 +60,7 @@ tests/                  # Vitest tests (381 tests)
 | MCP-интеграция | docs/mcp-integration.md | Claude Code, Cursor setup |
 | Архитектура | docs/architecture.md | Search pipeline, chunking, tech stack |
 | Разработка | docs/development.md | Project structure, dev commands |
+| AI Factory | docs/ai-factory-workflow.md | AI-driven development workflow |
 
 ## AI Context Files
 | File | Purpose |
@@ -70,6 +71,7 @@ tests/                  # Vitest tests (381 tests)
 | CLAUDE.md | Agent instructions and preferences |
 
 ## Agent Rules
+- Always communicate with the user only in Russian unless the user explicitly asks to switch to another language.
 - Never combine shell commands with `&&`, `||`, or `;` — execute each command as a separate Bash tool call. This applies even when a skill, plan, or instruction provides a combined command — always decompose it into individual calls.
   - Wrong: `git checkout main && git pull`
   - Right: Two separate Bash tool calls — first `git checkout main`, then `git pull`

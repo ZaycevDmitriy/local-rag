@@ -1,4 +1,4 @@
-[← Архитектура](architecture.md) · [Back to README](../README.md)
+[← Архитектура](architecture.md) · [Back to README](../README.md) · [AI Factory →](ai-factory-workflow.md)
 
 # Разработка
 
