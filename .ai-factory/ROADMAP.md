@@ -7,7 +7,6 @@
 - [ ] **Python tree-sitter extractor** — AST-парсинг Python: функции, классы, декораторы, docstrings
 - [ ] **Go tree-sitter extractor** — AST-парсинг Go: functions, structs, interfaces, methods with receivers
 - [ ] **Rust tree-sitter extractor** — AST-парсинг Rust: impl blocks, traits, macros, lifetime annotations
-- [ ] **Gemini Embeddings** — TextEmbedder для Google Gemini (gemini-embedding-001 / gemini-embedding-2-preview), task types RETRIEVAL_DOCUMENT/RETRIEVAL_QUERY, настраиваемая размерность 128-3072, SDK @google/genai
 - [ ] **Self-hosted embeddings (Ollama)** — реализация TextEmbedder для локальных моделей (stub уже в factory.ts)
 - [ ] **Code dependency graph** — граф связей (CALLS, INHERITS) через tree-sitter AST, новый MCP tool traverse_graph (spec 11.1)
 - [ ] **AI-powered summarization** — LLM-генерация описаний чанков, dual-vector search по content + summary (spec 11.4)

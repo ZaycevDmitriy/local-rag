@@ -68,6 +68,7 @@ rag status
 | [MCP-интеграция](docs/mcp-integration.md) | Подключение к Claude Code, Cursor |
 | [Архитектура](docs/architecture.md) | Search pipeline, chunking, tech stack |
 | [Разработка](docs/development.md) | Структура проекта, команды разработки |
+| [AI Factory](docs/ai-factory-workflow.md) | Рабочий процесс разработки с AI |
 
 ## License
 

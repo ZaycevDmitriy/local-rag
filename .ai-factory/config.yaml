@@ -1,0 +1,60 @@
+# AI Factory configuration for local-rag
+# Edit this file to customize AI Factory behavior for your project.
+
+# Language settings for AI agent communication and generated artifacts.
+language:
+  # Language for AI responses and user-facing communication.
+  ui: ru
+  # Language for generated artifacts (docs, comments, descriptions).
+  artifacts: ru
+  # Whether to keep technical terms in English regardless of language settings.
+  technical_terms: keep
+
+# Paths to AI Factory artifacts relative to project root.
+paths:
+  description: .ai-factory/DESCRIPTION.md
+  architecture: .ai-factory/ARCHITECTURE.md
+  docs: docs/
+  roadmap: .ai-factory/ROADMAP.md
+  research: .ai-factory/RESEARCH.md
+  rules_file: .ai-factory/RULES.md
+  plan: .ai-factory/PLAN.md
+  plans: .ai-factory/plans/
+  fix_plan: .ai-factory/FIX_PLAN.md
+  security: .ai-factory/SECURITY.md
+  references: .ai-factory/references/
+  patches: .ai-factory/patches/
+  evolutions: .ai-factory/evolutions/
+  evolution: .ai-factory/evolution/
+  specs: .ai-factory/specs/
+  rules: .ai-factory/rules/
+
+# Workflow settings for AI Factory commands.
+workflow:
+  # Automatically create directories for artifacts if they don't exist.
+  auto_create_dirs: true
+  # Format for plan IDs: "slug" (human-readable) or "uuid".
+  plan_id_format: slug
+  # Whether /aif-plan should also update ARCHITECTURE.md when relevant.
+  analyze_updates_architecture: true
+  # Whether architecture changes should propagate to ROADMAP.md.
+  architecture_updates_roadmap: true
+  # Verification mode for /aif-verify: "normal" or "strict".
+  verify_mode: normal
+
+# Git integration settings.
+git:
+  # Whether the project uses git.
+  enabled: true
+  # The base branch for PRs and comparisons.
+  base_branch: main
+  # Whether /aif-plan full should create a new feature branch.
+  create_branches: true
+  # Prefix for auto-created branch names.
+  branch_prefix: feature/
+  # Whether to skip git push after /aif-commit.
+  skip_push_after_commit: false
+
+# Path to the base rules file with detected project conventions.
+rules:
+  base: .ai-factory/rules/base.md
