@@ -13,7 +13,18 @@ vi.mock('node:fs/promises', () => ({
 }));
 
 // Импортируем после мока.
-import { cloneOrPull, expandHome, extractRepoName } from '../git.js';
+import {
+  cloneOrPull,
+  expandHome,
+  extractRepoName,
+  getCurrentRef,
+  listLocalBranches,
+  getHeadCommit,
+  getHeadTree,
+  getSubtreeOid,
+  isDirtyWorktree,
+  isAncestor,
+} from '../git.js';
 import * as childProcess from 'node:child_process';
 import * as fsp from 'node:fs/promises';
 
@@ -147,5 +158,155 @@ describe('cloneOrPull', () => {
     });
 
     await expect(cloneOrPull(url, branch, cloneDir)).rejects.toThrow('git: not found');
+  });
+});
+
+// --- Тесты для branch-aware git-методов. ---
+
+// Хелпер: мокирует execFile с callback-стилем для promisify.
+function mockGitOutput(stdout: string) {
+  mockExecFile.mockImplementation(
+    (_cmd: string, _args: string[], callback: (err: null, result: { stdout: string; stderr: string }) => void) => {
+      callback(null, { stdout, stderr: '' });
+    },
+  );
+}
+
+function mockGitError(message: string) {
+  mockExecFile.mockImplementation(
+    (_cmd: string, _args: string[], callback: (err: Error) => void) => {
+      callback(new Error(message));
+    },
+  );
+}
+
+describe('getCurrentRef', () => {
+  beforeEach(() => vi.resetAllMocks());
+
+  it('возвращает branch при symbolic ref', async () => {
+    mockGitOutput('main\n');
+
+    const result = await getCurrentRef('/repo');
+
+    expect(result).toEqual({ viewKind: 'branch', refName: 'main' });
+  });
+
+  it('возвращает detached при отсутствии symbolic ref', async () => {
+    // Первый вызов (symbolic-ref) — ошибка.
+    mockExecFile
+      .mockImplementationOnce((_cmd: string, _args: string[], callback: (err: Error) => void) => {
+        callback(new Error('not a symbolic ref'));
+      })
+      .mockImplementationOnce((_cmd: string, _args: string[], callback: (err: null, result: { stdout: string; stderr: string }) => void) => {
+        callback(null, { stdout: 'abc1234\n', stderr: '' });
+      });
+
+    const result = await getCurrentRef('/repo');
+
+    expect(result).toEqual({ viewKind: 'detached', refName: 'HEAD@abc1234' });
+  });
+});
+
+describe('listLocalBranches', () => {
+  beforeEach(() => vi.resetAllMocks());
+
+  it('возвращает список веток', async () => {
+    mockGitOutput('main\nfeature/foo\ndevelop\n');
+
+    const result = await listLocalBranches('/repo');
+
+    expect(result).toEqual(['main', 'feature/foo', 'develop']);
+  });
+
+  it('возвращает пустой массив при пустом выводе', async () => {
+    mockGitOutput('');
+
+    const result = await listLocalBranches('/repo');
+
+    expect(result).toEqual([]);
+  });
+});
+
+describe('getHeadCommit', () => {
+  beforeEach(() => vi.resetAllMocks());
+
+  it('возвращает OID HEAD commit', async () => {
+    mockGitOutput('abc123def456789\n');
+
+    const result = await getHeadCommit('/repo');
+
+    expect(result).toBe('abc123def456789');
+  });
+});
+
+describe('getHeadTree', () => {
+  beforeEach(() => vi.resetAllMocks());
+
+  it('возвращает OID HEAD tree', async () => {
+    mockGitOutput('tree789abc\n');
+
+    const result = await getHeadTree('/repo');
+
+    expect(result).toBe('tree789abc');
+  });
+});
+
+describe('getSubtreeOid', () => {
+  beforeEach(() => vi.resetAllMocks());
+
+  it('возвращает OID поддерева', async () => {
+    mockGitOutput('subtree123\n');
+
+    const result = await getSubtreeOid('/repo', 'src/app');
+
+    expect(result).toBe('subtree123');
+  });
+
+  it('возвращает null если subpath не найден', async () => {
+    mockGitError('fatal: not valid object name');
+
+    const result = await getSubtreeOid('/repo', 'nonexistent');
+
+    expect(result).toBeNull();
+  });
+});
+
+describe('isDirtyWorktree', () => {
+  beforeEach(() => vi.resetAllMocks());
+
+  it('возвращает true при dirty worktree', async () => {
+    mockGitOutput(' M src/file.ts\n');
+
+    const result = await isDirtyWorktree('/repo');
+
+    expect(result).toBe(true);
+  });
+
+  it('возвращает false при clean worktree', async () => {
+    mockGitOutput('');
+
+    const result = await isDirtyWorktree('/repo');
+
+    expect(result).toBe(false);
+  });
+});
+
+describe('isAncestor', () => {
+  beforeEach(() => vi.resetAllMocks());
+
+  it('возвращает true если является предком', async () => {
+    mockGitOutput('');
+
+    const result = await isAncestor('/repo', 'abc', 'def');
+
+    expect(result).toBe(true);
+  });
+
+  it('возвращает false если не является предком', async () => {
+    mockGitError('exit code 1');
+
+    const result = await isAncestor('/repo', 'abc', 'xyz');
+
+    expect(result).toBe(false);
   });
 });
