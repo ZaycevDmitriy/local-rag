@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createHash } from 'node:crypto';
-import { detectChanges, detectViewChanges, type ViewChangeDetectionParams } from '../incremental.js';
+import { detectChanges, detectViewChanges } from '../incremental.js';
 import type { IndexedFileStorage, SourceViewRow } from '../../storage/index.js';
 import type { ScannedFile } from '../../sources/index.js';
 

@@ -46,13 +46,13 @@ export function registerListSourcesTool(
               lastIndexedAt: s.last_indexed_at?.toISOString() ?? null,
               activeView: activeView
                 ? {
-                    viewKind: activeView.view_kind,
-                    refName: activeView.ref_name,
-                    chunkCount: activeView.chunk_count,
-                    fileCount: activeView.file_count,
-                    dirty: activeView.dirty,
-                    snapshotFingerprint: activeView.snapshot_fingerprint,
-                  }
+                  viewKind: activeView.view_kind,
+                  refName: activeView.ref_name,
+                  chunkCount: activeView.chunk_count,
+                  fileCount: activeView.file_count,
+                  dirty: activeView.dirty,
+                  snapshotFingerprint: activeView.snapshot_fingerprint,
+                }
                 : null,
               viewCount: views.length,
             };

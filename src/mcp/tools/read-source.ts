@@ -250,7 +250,7 @@ async function readByCoordinates(
   }
 
   // Определяем viewId: по branch или active_view_id.
-  let viewId = source.active_view_id;
+  const viewId = source.active_view_id;
   if (branch) {
     // TODO: lookup view by branch name через SourceViewStorage (доступен через DI в server.ts).
     // Для координатного чтения используем active view как fallback.

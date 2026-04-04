@@ -239,11 +239,11 @@ export async function indexSourceFromConfig(
   const previousViewState: PreviousViewState | undefined =
     existingView?.last_indexed_at
       ? {
-          headCommitOid: existingView.head_commit_oid,
-          headTreeOid: existingView.head_tree_oid,
-          subtreeOid: existingView.subtree_oid,
-          dirty: existingView.dirty,
-        }
+        headCommitOid: existingView.head_commit_oid,
+        headTreeOid: existingView.head_tree_oid,
+        subtreeOid: existingView.subtree_oid,
+        dirty: existingView.dirty,
+      }
       : undefined;
 
   // Шаг 6: Вычисляем snapshot fingerprint.
@@ -268,13 +268,13 @@ export async function indexSourceFromConfig(
   // Шаг 8: Определяем изменения.
   const gitContext: GitSnapshotContext | undefined = gitInfo
     ? {
-        repoRoot: gitInfo.repoRoot,
-        repoSubpath: gitInfo.repoSubpath,
-        headCommitOid: gitInfo.headCommitOid,
-        headTreeOid: gitInfo.headTreeOid,
-        subtreeOid: gitInfo.subtreeOid,
-        dirty: gitInfo.dirty,
-      }
+      repoRoot: gitInfo.repoRoot,
+      repoSubpath: gitInfo.repoSubpath,
+      headCommitOid: gitInfo.headCommitOid,
+      headTreeOid: gitInfo.headTreeOid,
+      subtreeOid: gitInfo.subtreeOid,
+      dirty: gitInfo.dirty,
+    }
     : undefined;
 
   const changeResult = await detectViewChanges({

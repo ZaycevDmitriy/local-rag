@@ -408,7 +408,6 @@ describe('indexSourceFromConfig', () => {
       sourceStorage,
       sourceViewStorage,
       chunkStorage,
-      indexer,
       runtime,
     } = createRuntimeMock();
 
@@ -453,7 +452,6 @@ describe('indexSourceFromConfig', () => {
       sourceStorage,
       sourceViewStorage,
       chunkStorage,
-      indexer,
       runtime,
     } = createRuntimeMock();
 
@@ -488,7 +486,6 @@ describe('indexSourceFromConfig', () => {
       sourceStorage,
       sourceViewStorage,
       chunkStorage,
-      indexer,
       runtime,
     } = createRuntimeMock();
 
