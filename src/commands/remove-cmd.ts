@@ -1,7 +1,8 @@
 // Команда rag remove — удаление источника данных.
+// CASCADE в schema удаляет source_views → indexed_files → chunks автоматически.
 import { Command } from 'commander';
 import { loadConfig } from '../config/index.js';
-import { createDb, closeDb, SourceStorage, ChunkStorage, IndexedFileStorage } from '../storage/index.js';
+import { createDb, closeDb, SourceStorage } from '../storage/index.js';
 
 export const removeCommand = new Command('remove')
   .description('Remove an indexed source and all its chunks')
@@ -14,8 +15,6 @@ export const removeCommand = new Command('remove')
 
       try {
         const sourceStorage = new SourceStorage(sql);
-        const chunkStorage = new ChunkStorage(sql);
-        const indexedFileStorage = new IndexedFileStorage(sql);
 
         const source = await sourceStorage.getByName(name);
         if (!source) {
@@ -23,12 +22,11 @@ export const removeCommand = new Command('remove')
           process.exit(1);
         }
 
-        // Удаляем связанные данные.
-        await indexedFileStorage.deleteBySource(source.id);
-        const deletedChunks = await chunkStorage.deleteBySource(source.id);
-        await sourceStorage.remove(name);
+        // Удаляем источник (CASCADE удалит views, indexed_files, chunks).
+        await sourceStorage.remove(source.id);
 
-        console.log(`Источник "${name}" удалён (${deletedChunks} фрагментов).`);
+        console.log(`Источник "${name}" удалён.`);
+        console.log('  Orphan file_blobs и chunk_contents можно очистить через `rag gc`.');
       } finally {
         await closeDb(sql);
       }

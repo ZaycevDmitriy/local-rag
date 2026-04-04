@@ -71,6 +71,11 @@ describe('registerStatusTool', () => {
         java: 'active' as const,
         kotlin: 'fallback' as const,
       },
+      viewCount: 5,
+      fileBlobCount: 100,
+      fileBlobSizeBytes: 512000,
+      chunkContentCount: 200,
+      chunkContentWithEmbeddingCount: 180,
     };
 
     vi.mocked(getSystemStatusSnapshot).mockResolvedValue(snapshot);
@@ -97,7 +102,14 @@ describe('registerStatusTool', () => {
             connected: true,
             schemaVersion: '002_vector_dimensions',
             totalSources: 3,
+            totalViews: 5,
             totalChunks: 42,
+          },
+          storage: {
+            fileBlobCount: 100,
+            fileBlobSizeBytes: 512000,
+            chunkContentCount: 200,
+            chunkContentWithEmbeddingCount: 180,
           },
           providers: {
             embeddings: {

@@ -1,4 +1,4 @@
-// Команда rag status — статус системы.
+// Команда rag status — статус системы с branch-aware метриками.
 import { Command } from 'commander';
 import { loadConfig } from '../config/index.js';
 import { closeDb, createDb } from '../storage/index.js';
@@ -19,6 +19,7 @@ export const statusCommand = new Command('status')
         console.log('=== Статус Local RAG ===');
         console.log('');
         console.log(`Источники:     ${snapshot.sourceCount}`);
+        console.log(`Views:         ${snapshot.viewCount}`);
         console.log(`Фрагменты:     ${snapshot.chunkCount}`);
         console.log(
           `Последняя индексация: ${snapshot.lastIndexedAt ? new Date(snapshot.lastIndexedAt).toLocaleString('ru-RU') : 'не выполнялась'}`,
@@ -27,6 +28,13 @@ export const statusCommand = new Command('status')
         console.log(`Провайдер эмбеддингов: ${snapshot.embeddingsProvider}`);
         console.log(`Провайдер реранкера:   ${snapshot.rerankerProvider}`);
         console.log('');
+
+        // Blob/content storage.
+        const blobSizeMB = (snapshot.fileBlobSizeBytes / 1024 / 1024).toFixed(1);
+        console.log(`File blobs:       ${snapshot.fileBlobCount} (${blobSizeMB} MB)`);
+        console.log(`Chunk contents:   ${snapshot.chunkContentCount} (${snapshot.chunkContentWithEmbeddingCount} с embedding)`);
+        console.log('');
+
         console.log(`Миграции: ${snapshot.appliedMigrations.length > 0 ? snapshot.appliedMigrations.join(', ') : 'не применены'}`);
         console.log('');
         console.log('Tree-sitter languages:');

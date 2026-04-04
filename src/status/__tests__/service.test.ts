@@ -53,6 +53,26 @@ function createSqlMock(lastIndexedAt: Date | null): postgres.Sql {
       return [{ last_indexed_at: lastIndexedAt }];
     }
 
+    if (query.includes('COUNT(*)::text AS count FROM source_views')) {
+      return [{ count: '4' }];
+    }
+
+    if (query.includes('COUNT(*)::text AS count FROM file_blobs')) {
+      return [{ count: '50' }];
+    }
+
+    if (query.includes('SUM(byte_size)') && query.includes('file_blobs')) {
+      return [{ total_bytes: '256000' }];
+    }
+
+    if (query.includes('COUNT(*)::text AS count FROM chunk_contents') && query.includes('embedding IS NOT NULL')) {
+      return [{ count: '12' }];
+    }
+
+    if (query.includes('COUNT(*)::text AS count FROM chunk_contents')) {
+      return [{ count: '15' }];
+    }
+
     throw new Error(`Unexpected query: ${query}`);
   });
 
@@ -97,6 +117,11 @@ describe('getSystemStatusSnapshot', () => {
         java: 'active',
         kotlin: 'fallback',
       },
+      viewCount: 4,
+      fileBlobCount: 50,
+      fileBlobSizeBytes: 256000,
+      chunkContentCount: 15,
+      chunkContentWithEmbeddingCount: 12,
     });
 
     expect(getAppliedMigrations).toHaveBeenCalledWith(sql);

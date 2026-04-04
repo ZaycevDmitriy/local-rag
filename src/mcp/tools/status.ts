@@ -27,7 +27,14 @@ export function registerStatusTool(
             connected: true,
             schemaVersion,
             totalSources: snapshot.sourceCount,
+            totalViews: snapshot.viewCount,
             totalChunks: snapshot.chunkCount,
+          },
+          storage: {
+            fileBlobCount: snapshot.fileBlobCount,
+            fileBlobSizeBytes: snapshot.fileBlobSizeBytes,
+            chunkContentCount: snapshot.chunkContentCount,
+            chunkContentWithEmbeddingCount: snapshot.chunkContentWithEmbeddingCount,
           },
           providers: {
             embeddings: {

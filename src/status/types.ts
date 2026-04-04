@@ -19,4 +19,10 @@ export interface SystemStatusSnapshot {
     retrieveTopK: number;
   };
   treeSitterLanguages: TreeSitterStatus;
+  // Branch-aware метрики (Task 8).
+  viewCount: number;
+  fileBlobCount: number;
+  fileBlobSizeBytes: number;
+  chunkContentCount: number;
+  chunkContentWithEmbeddingCount: number;
 }
