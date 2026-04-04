@@ -33,16 +33,19 @@ describe('export/import integration', () => {
 
       // Манифест.
       const manifest: Manifest = {
-        version: 1,
-        schemaVersion: 3,
-        createdAt: '2026-02-27T12:00:00Z',
+        version: 2,
+        schemaVersion: 5,
+        createdAt: '2026-04-05T12:00:00Z',
         localRagVersion: '0.1.0',
         sources: [
           {
             name: 'test-source',
             type: 'local',
             path: '/tmp/test',
-            chunksCount: 2,
+            viewCount: 1,
+            chunkCount: 2,
+            fileBlobCount: 1,
+            chunkContentCount: 2,
             hasEmbeddings: true,
           },
         ],
@@ -99,7 +102,7 @@ describe('export/import integration', () => {
 
       // Проверка манифеста.
       const readBackManifest = await readManifest(unpackDir);
-      expect(readBackManifest.version).toBe(1);
+      expect(readBackManifest.version).toBe(2);
       expect(readBackManifest.sources).toHaveLength(1);
       expect(readBackManifest.sources[0]!.name).toBe('test-source');
     });

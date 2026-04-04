@@ -1,4 +1,5 @@
-// Ядро импорта: распаковка → валидация → выполнение SQL.
+// Ядро импорта v2: распаковка → валидация → выполнение SQL.
+// V1 manifests отклоняются с информативным сообщением.
 import { mkdtemp, readFile, rm, access } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -13,7 +14,7 @@ export interface ImportOptions {
   force: boolean;
   remapPath?: { from: string; to: string };
   onProgress?: (sourceName: string, status: 'importing' | 'done' | 'skipped') => void;
-  onConflict?: (sourceName: string, chunksCount: number) => Promise<boolean>;
+  onConflict?: (sourceName: string, chunkCount: number) => Promise<boolean>;
 }
 
 export interface ImportResult {
@@ -38,7 +39,6 @@ export function parseStatements(content: string): string[] {
 
     current += line + '\n';
 
-    // Стейтмент завершается точкой с запятой.
     if (trimmed.endsWith(';')) {
       statements.push(current.trim());
       current = '';
@@ -48,7 +48,8 @@ export function parseStatements(content: string): string[] {
   return statements;
 }
 
-// Импортирует данные из архива в БД.
+// Импортирует v2 данные из архива в БД.
+// V1 manifests отклоняются через readManifest (бросает ошибку).
 export async function importData(options: ImportOptions): Promise<ImportResult> {
   const { sql, archivePath, sourceNames, force, remapPath, onProgress, onConflict } = options;
 
@@ -58,7 +59,7 @@ export async function importData(options: ImportOptions): Promise<ImportResult> 
     // Распаковка.
     await unpackArchive(archivePath, tmpDir);
 
-    // Валидация манифеста.
+    // Валидация v2 манифеста (v1 → ошибка с рекомендацией переиндексации).
     const manifest = await readManifest(tmpDir);
 
     // Проверка версии схемы.
@@ -85,14 +86,14 @@ export async function importData(options: ImportOptions): Promise<ImportResult> 
       const sqlFilePath = join(tmpDir, 'data', `${manifestSource.name}.sql`);
 
       // Проверяем конфликт.
-      const existing = await sql<Array<{ id: string; chunk_count: number }>>`
-        SELECT id, chunk_count FROM sources WHERE name = ${manifestSource.name}
+      const existing = await sql<Array<{ id: string }>>`
+        SELECT id FROM sources WHERE name = ${manifestSource.name}
       `;
 
       if (existing.length > 0) {
         if (!force) {
           if (onConflict) {
-            const overwrite = await onConflict(manifestSource.name, existing[0]!.chunk_count);
+            const overwrite = await onConflict(manifestSource.name, manifestSource.chunkCount);
             if (!overwrite) {
               onProgress?.(manifestSource.name, 'skipped');
               sourcesSkipped++;
@@ -124,15 +125,13 @@ export async function importData(options: ImportOptions): Promise<ImportResult> 
       await sql.begin(async (tx: unknown) => {
         const query = tx as postgres.Sql;
 
-        // Удаляем старые данные если конфликт.
+        // Удаляем старые данные если конфликт. CASCADE удалит views/files/chunks.
         if (existing.length > 0) {
           const sourceId = existing[0]!.id;
-          await query`DELETE FROM indexed_files WHERE source_id = ${sourceId}`;
-          await query`DELETE FROM chunks WHERE source_id = ${sourceId}`;
           await query`DELETE FROM sources WHERE id = ${sourceId}`;
         }
 
-        // Выполняем SQL-стейтменты.
+        // Выполняем SQL-стейтменты (INSERT order из exporter: sources → views → blobs → files → contents → chunks).
         for (const stmt of statements) {
           await query.unsafe(stmt);
         }
@@ -141,10 +140,6 @@ export async function importData(options: ImportOptions): Promise<ImportResult> 
         if (remapPath) {
           await query.unsafe(
             'UPDATE sources SET path = REPLACE(path, $1, $2) WHERE name = $3',
-            [remapPath.from, remapPath.to, manifestSource.name],
-          );
-          await query.unsafe(
-            'UPDATE chunks SET metadata = jsonb_set(metadata, \'{path}\', to_jsonb(REPLACE(metadata->>\'path\', $1, $2))) WHERE source_id = (SELECT id FROM sources WHERE name = $3)',
             [remapPath.from, remapPath.to, manifestSource.name],
           );
         }
@@ -162,13 +157,13 @@ export async function importData(options: ImportOptions): Promise<ImportResult> 
           warnings.push(
             `Source '${manifestSource.name}' references path '${pathToCheck}' ` +
             'which does not exist on this machine. ' +
-            'Search will work (data is in DB), but \'read_source\' won\'t be able to read files. ' +
+            'Search will work (data is in DB), but \'read_source\' uses blob-backed fallback. ' +
             'Use --remap-path to update paths.',
           );
         }
       }
 
-      totalChunks += manifestSource.chunksCount;
+      totalChunks += manifestSource.chunkCount;
       sourcesImported++;
       onProgress?.(manifestSource.name, 'done');
     }
@@ -179,7 +174,7 @@ export async function importData(options: ImportOptions): Promise<ImportResult> 
   }
 }
 
-// Возвращает список SQL-файлов в архиве (для интерактивного выбора).
+// Возвращает список источников из архива (для интерактивного выбора).
 export async function listArchiveSources(archivePath: string): Promise<string[]> {
   const tmpDir = await mkdtemp(join(tmpdir(), 'rag-list-'));
 

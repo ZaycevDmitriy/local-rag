@@ -69,7 +69,7 @@ export const importCommand = new Command('import')
             const selected = await checkbox({
               message: 'Выберите источники для импорта:',
               choices: manifest.sources.map((s) => ({
-                name: `${s.name} (${s.chunksCount} фрагментов, ${s.hasEmbeddings ? 'с эмбеддингами' : 'без эмбеддингов'})`,
+                name: `${s.name} (${s.chunkCount} фрагментов, ${s.hasEmbeddings ? 'с эмбеддингами' : 'без эмбеддингов'})`,
                 value: s.name,
                 checked: true,
               })),
