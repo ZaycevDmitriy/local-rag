@@ -57,11 +57,15 @@ export function escapeValue(value: unknown): string {
   return `E'${escaped}'`;
 }
 
+// Content-addressed таблицы: INSERT ON CONFLICT DO NOTHING при импорте.
+const CONTENT_ADDRESSED_TABLES = new Set(['file_blobs', 'chunk_contents']);
+
 // Генерирует INSERT-стейтмент для одной строки.
 export function generateInsert(table: string, row: Record<string, unknown>): string {
   const columns = Object.keys(row);
   const values = columns.map((col) => escapeValue(row[col]));
-  return `INSERT INTO ${table} (${columns.join(', ')}) VALUES (${values.join(', ')});`;
+  const suffix = CONTENT_ADDRESSED_TABLES.has(table) ? ' ON CONFLICT (content_hash) DO NOTHING' : '';
+  return `INSERT INTO ${table} (${columns.join(', ')}) VALUES (${values.join(', ')})${suffix};`;
 }
 
 // Экспортирует данные v2 из БД в архив.
@@ -91,15 +95,19 @@ export async function exportData(options: ExportOptions): Promise<ExportResult> 
       const header = `-- Source: ${source.name} (v2 branch-aware)\n-- Exported: ${new Date().toISOString()}\n\n`;
       await writeFile(sqlFilePath, header, 'utf-8');
 
-      // 1. INSERT sources.
+      // 1. INSERT sources (active_view_id = NULL, чтобы не нарушать FK на source_views).
       await appendFile(sqlFilePath, '-- sources\n', 'utf-8');
       await appendFile(sqlFilePath, generateInsert('sources', {
         id: source.id, name: source.name, type: source.type, path: source.path,
         git_url: source.git_url, repo_root_path: source.repo_root_path,
-        repo_subpath: source.repo_subpath, active_view_id: source.active_view_id,
+        repo_subpath: source.repo_subpath, active_view_id: null,
         config: source.config, last_indexed_at: source.last_indexed_at,
         created_at: source.created_at, updated_at: source.updated_at,
       }) + '\n\n', 'utf-8');
+      // UPDATE active_view_id добавляется в конце файла после вставки source_views.
+      const activeViewUpdate = source.active_view_id
+        ? `\n-- restore active_view_id\nUPDATE sources SET active_view_id = ${escapeValue(source.active_view_id)} WHERE id = ${escapeValue(source.id)};\n`
+        : '';
 
       // 2. INSERT source_views.
       const views = await sql<Array<Record<string, unknown>>>`
@@ -161,7 +169,7 @@ export async function exportData(options: ExportOptions): Promise<ExportResult> 
       }
       onProgress?.(source.name, 'chunk_contents', chunkContents.length, chunkContents.length);
 
-      // 7. INSERT chunks (keyset pagination).
+      // 7. INSERT chunks (keyset pagination по UUID PK).
       let chunkCount = 0;
       if (viewIds.length > 0) {
         const [countResult] = await sql<[{ count: string }]>`
@@ -170,26 +178,23 @@ export async function exportData(options: ExportOptions): Promise<ExportResult> 
         const totalSourceChunks = parseInt(countResult!.count, 10);
         await appendFile(sqlFilePath, `\n-- chunks (${totalSourceChunks})\n`, 'utf-8');
 
-        let cursorCreatedAt: Date | null = null;
         let cursorId: string | null = null;
 
         while (true) {
-          const chunks: Array<Record<string, unknown>> = cursorCreatedAt && cursorId
+          const chunks: Array<Record<string, unknown>> = cursorId
             ? await sql<Array<Record<string, unknown>>>`
                 SELECT * FROM chunks
-                WHERE source_view_id = ANY(${viewIds})
-                  AND (created_at > ${cursorCreatedAt} OR (created_at = ${cursorCreatedAt} AND id > ${cursorId}))
-                ORDER BY created_at, id LIMIT ${BATCH_SIZE}
+                WHERE source_view_id = ANY(${viewIds}) AND id > ${cursorId}
+                ORDER BY id LIMIT ${BATCH_SIZE}
               `
             : await sql<Array<Record<string, unknown>>>`
                 SELECT * FROM chunks WHERE source_view_id = ANY(${viewIds})
-                ORDER BY created_at, id LIMIT ${BATCH_SIZE}
+                ORDER BY id LIMIT ${BATCH_SIZE}
               `;
 
           if (chunks.length === 0) break;
 
           const last = chunks[chunks.length - 1]!;
-          cursorCreatedAt = last.created_at as Date;
           cursorId = last.id as string;
 
           for (const chunk of chunks) {
@@ -199,6 +204,11 @@ export async function exportData(options: ExportOptions): Promise<ExportResult> 
           chunkCount += chunks.length;
           onProgress?.(source.name, 'chunks', chunkCount, totalSourceChunks);
         }
+      }
+
+      // Восстановление active_view_id после вставки всех зависимостей.
+      if (activeViewUpdate) {
+        await appendFile(sqlFilePath, activeViewUpdate, 'utf-8');
       }
 
       totalChunks += chunkCount;
