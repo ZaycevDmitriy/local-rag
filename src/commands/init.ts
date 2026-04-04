@@ -5,6 +5,7 @@ import {
   createDb,
   closeDb,
   runMigrations,
+  getAppliedMigrations,
   initialMigration,
   createVectorDimensionsMigration,
   pathIndexMigration,
@@ -29,6 +30,19 @@ export const initCommand = new Command('init')
           config.embeddings.jina?.dimensions ??
           config.embeddings.openai?.dimensions ??
           1024;
+
+        // Проверяем, требуется ли деструктивная миграция 005 при наличии данных.
+        const applied = await getAppliedMigrations(sql);
+        const has005 = applied.includes('005_branch_views_rebuild');
+        const hasExistingData = applied.length > 0 && !has005;
+
+        if (hasExistingData) {
+          console.warn(
+            '\n⚠  Миграция 005_branch_views_rebuild пересоздаст все таблицы (DROP + CREATE).\n' +
+            '   Существующие данные будут потеряны. Рекомендуется сначала выполнить:\n' +
+            '   rag export --all\n',
+          );
+        }
 
         const migrations: Migration[] = [initialMigration];
         if (dimensions !== 1024) {

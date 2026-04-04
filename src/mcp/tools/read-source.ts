@@ -78,13 +78,15 @@ type ToolResult = { content: Array<{ type: 'text'; text: string }>; isError?: bo
 
 /**
  * Загружает содержимое файла через file_blobs.
- * Fallback на FS если blob не найден.
+ * FS fallback допускается только для workspace view (текущий checkout).
+ * Для branch-чтений fallback заблокирован — иначе можно вернуть данные чужой ветки.
  */
 async function loadFileContent(
   contentHash: string | null,
   basePath: string | null,
   relativePath: string,
   fileBlobStorage: FileBlobStorage,
+  allowFsFallback = true,
 ): Promise<string | null> {
   // Попытка из blob.
   if (contentHash) {
@@ -95,8 +97,8 @@ async function loadFileContent(
     }
   }
 
-  // FS fallback.
-  if (basePath) {
+  // FS fallback — только для workspace reads.
+  if (allowFsFallback && basePath) {
     try {
       const absolutePath = join(basePath, relativePath);
       console.log(`[read_source] FS fallback: ${absolutePath}`);
@@ -251,6 +253,8 @@ async function readByCoordinates(
 
   // Определяем viewId: по branch или active_view_id.
   const viewId = source.active_view_id;
+  // FS fallback запрещён для branch-чтений — иначе можно вернуть данные текущего checkout вместо запрошенной ветки.
+  const isBranchRead = !!branch;
   if (branch) {
     // TODO: lookup view by branch name через SourceViewStorage (доступен через DI в server.ts).
     // Для координатного чтения используем active view как fallback.
@@ -261,15 +265,17 @@ async function readByCoordinates(
   if (viewId) {
     const indexedFile = await indexedFileStorage.getByPath(viewId, path);
     if (indexedFile) {
-      const fileContent = await loadFileContent(indexedFile.content_hash, source.path, path, fileBlobStorage);
+      const fileContent = await loadFileContent(
+        indexedFile.content_hash, source.path, path, fileBlobStorage, !isBranchRead,
+      );
       if (fileContent) {
         return formatFileFragment(fileContent, path, startLine, endLine, context, {});
       }
     }
   }
 
-  // FS fallback.
-  if (source.path) {
+  // FS fallback — только для workspace reads, не для branch.
+  if (!isBranchRead && source.path) {
     const absolutePath = join(source.path, path);
     try {
       const fileContent = await readFile(absolutePath, 'utf-8');
