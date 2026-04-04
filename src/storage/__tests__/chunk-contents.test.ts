@@ -80,11 +80,59 @@ describe('ChunkContentStorage', () => {
     expect(result).toBe(3);
   });
 
-  it('searchBm25 бросает ошибку (stub)', async () => {
-    await expect(storage.searchBm25('test', 10)).rejects.toThrow('Task 7');
+  it('searchBm25 возвращает результаты по GIN-индексу', async () => {
+    const mockFn = sql as unknown as ReturnType<typeof vi.fn>;
+    mockFn.mockResolvedValueOnce([
+      { content_hash: 'hash1', score: 0.8 },
+      { content_hash: 'hash2', score: 0.6 },
+    ]);
+
+    const result = await storage.searchBm25('function test', 10);
+
+    expect(result).toHaveLength(2);
+    expect(result[0]).toEqual({ contentHash: 'hash1', score: 0.8 });
+    expect(result[1]).toEqual({ contentHash: 'hash2', score: 0.6 });
   });
 
-  it('searchVector бросает ошибку (stub)', async () => {
-    await expect(storage.searchVector([0.1], 10)).rejects.toThrow('Task 7');
+  it('searchBm25 с prefilter contentHashes (narrow mode)', async () => {
+    const mockFn = sql as unknown as ReturnType<typeof vi.fn>;
+    mockFn.mockResolvedValueOnce([{ content_hash: 'hash1', score: 0.9 }]);
+
+    const result = await storage.searchBm25('test', 10, ['hash1', 'hash2']);
+
+    expect(result).toHaveLength(1);
+    expect(result[0]!.contentHash).toBe('hash1');
+  });
+
+  it('searchBm25 возвращает пустой массив для пустого запроса', async () => {
+    const result = await storage.searchBm25('', 10);
+
+    expect(result).toEqual([]);
+  });
+
+  it('searchVector вызывает sql.unsafe с vector параметром', async () => {
+    const unsafeFn = (sql as unknown as { unsafe: ReturnType<typeof vi.fn> }).unsafe;
+    unsafeFn.mockResolvedValueOnce([
+      { content_hash: 'hash1', distance: 0.2 },
+    ]);
+
+    const result = await storage.searchVector([0.1, 0.2], 10);
+
+    expect(result).toHaveLength(1);
+    // distance 0.2 → score = 1 - 0.2 = 0.8.
+    expect(result[0]!.score).toBe(0.8);
+    expect(unsafeFn).toHaveBeenCalled();
+  });
+
+  it('searchVector с prefilter (narrow mode)', async () => {
+    const unsafeFn = (sql as unknown as { unsafe: ReturnType<typeof vi.fn> }).unsafe;
+    unsafeFn.mockResolvedValueOnce([
+      { content_hash: 'hash1', distance: 0.1 },
+    ]);
+
+    const result = await storage.searchVector([0.1], 10, ['hash1']);
+
+    expect(result).toHaveLength(1);
+    expect(result[0]!.contentHash).toBe('hash1');
   });
 });

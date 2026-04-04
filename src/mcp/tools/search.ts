@@ -16,6 +16,7 @@ export function registerSearchTool(server: McpServer, coordinator: SearchCoordin
         sourceId: z.string().uuid().optional().describe('Filter by source ID'),
         sourceType: z.enum(['code', 'markdown', 'text', 'pdf']).optional().describe('Filter by source type'),
         pathPrefix: z.string().optional().describe('Filter by file path prefix'),
+        branch: z.string().optional().describe('Search in a specific branch instead of active views'),
       },
     },
     async (args) => {
@@ -26,6 +27,7 @@ export function registerSearchTool(server: McpServer, coordinator: SearchCoordin
           sourceId: args.sourceId,
           sourceType: args.sourceType,
           pathPrefix: args.pathPrefix,
+          branch: args.branch,
         });
 
         return {

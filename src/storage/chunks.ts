@@ -162,7 +162,62 @@ export class ChunkStorage {
     return parseInt(result[0]!.count, 10);
   }
 
-  // Stub — будет заменён в Task 7 (branch-aware search).
+  /**
+   * Возвращает уникальные content hashes из chunks, отфильтрованные по occurrence-level фильтрам.
+   * Используется для narrow/broad mode selection в SearchCoordinator.
+   */
+  async getContentHashes(filters: {
+    sourceViewIds: string[];
+    sourceType?: string;
+    pathPrefix?: string;
+  }): Promise<string[]> {
+    const { sourceViewIds, sourceType, pathPrefix } = filters;
+
+    if (sourceViewIds.length === 0) return [];
+
+    const rows = await this.sql<Array<{ chunk_content_hash: string }>>`
+      SELECT DISTINCT chunk_content_hash
+      FROM chunks
+      WHERE source_view_id = ANY(${sourceViewIds})
+        ${sourceType ? this.sql`AND source_type = ${sourceType}` : this.sql``}
+        ${pathPrefix ? this.sql`AND path LIKE ${pathPrefix + '%'}` : this.sql``}
+    `;
+
+    console.log(`[ChunkStorage] getContentHashes: views=${sourceViewIds.length}, result=${rows.length}`);
+
+    return rows.map((r) => r.chunk_content_hash);
+  }
+
+  /**
+   * Resolves content hashes → один occurrence per hash per view.
+   * Tie-break: path ASC, ordinal ASC.
+   * Используется для content-level dedup перед RRF.
+   */
+  async resolveOccurrences(
+    contentHashes: string[],
+    sourceViewIds: string[],
+    sourceType?: string,
+    pathPrefix?: string,
+  ): Promise<Array<{ id: string; chunk_content_hash: string; path: string; ordinal: number }>> {
+    if (contentHashes.length === 0 || sourceViewIds.length === 0) return [];
+
+    // DISTINCT ON (chunk_content_hash) с ORDER BY path, ordinal для детерминированного tie-break.
+    const rows = await this.sql<Array<{ id: string; chunk_content_hash: string; path: string; ordinal: number }>>`
+      SELECT DISTINCT ON (chunk_content_hash) id, chunk_content_hash, path, ordinal
+      FROM chunks
+      WHERE chunk_content_hash = ANY(${contentHashes})
+        AND source_view_id = ANY(${sourceViewIds})
+        ${sourceType ? this.sql`AND source_type = ${sourceType}` : this.sql``}
+        ${pathPrefix ? this.sql`AND path LIKE ${pathPrefix + '%'}` : this.sql``}
+      ORDER BY chunk_content_hash, path, ordinal
+    `;
+
+    console.log(`[ChunkStorage] resolveOccurrences: input=${contentHashes.length}, result=${rows.length}`);
+
+    return rows;
+  }
+
+  // @deprecated — legacy search stubs. Сохранены для обратной совместимости с тестами.
   async searchBm25(
     _query: string,
     _limit: number,
@@ -170,10 +225,10 @@ export class ChunkStorage {
     _sourceType?: string,
     _pathPrefix?: string,
   ): Promise<Array<{ id: string; score: number }>> {
-    throw new Error('Branch-aware search: будет реализовано в Task 7');
+    throw new Error('Branch-aware search: используйте ChunkContentStorage.searchBm25 + resolveOccurrences');
   }
 
-  // Stub — будет заменён в Task 7 (branch-aware search).
+  // @deprecated — legacy search stub.
   async searchVector(
     _embedding: number[],
     _limit: number,
@@ -181,7 +236,7 @@ export class ChunkStorage {
     _sourceType?: string,
     _pathPrefix?: string,
   ): Promise<Array<{ id: string; score: number }>> {
-    throw new Error('Branch-aware search: будет реализовано в Task 7');
+    throw new Error('Branch-aware search: используйте ChunkContentStorage.searchVector + resolveOccurrences');
   }
 
   // @deprecated — backward-compatible метод. Удалить после Task 5.
