@@ -8,6 +8,7 @@ import type {
   FileBlobStorage,
   IndexedFileStorage,
   SourceStorage,
+  SourceViewStorage,
 } from '../../storage/index.js';
 
 // Регистрирует инструмент read_source на MCP-сервере.
@@ -17,6 +18,7 @@ export function registerReadSourceTool(
   sourceStorage: SourceStorage,
   fileBlobStorage: FileBlobStorage,
   indexedFileStorage: IndexedFileStorage,
+  sourceViewStorage: SourceViewStorage,
 ): void {
   server.registerTool(
     'read_source',
@@ -39,21 +41,21 @@ export function registerReadSourceTool(
         if (args.chunkId) {
           return await readByChunkId(
             args.chunkId, args.context ?? 0,
-            chunkStorage, sourceStorage, fileBlobStorage, indexedFileStorage,
+            chunkStorage, sourceStorage, fileBlobStorage, indexedFileStorage, sourceViewStorage,
           );
         }
 
         if (args.sourceName && args.path && args.headerPath) {
           return await readByHeaderPath(
             args.sourceName, args.path, args.headerPath,
-            chunkStorage, sourceStorage, fileBlobStorage, indexedFileStorage,
+            chunkStorage, sourceStorage, fileBlobStorage, indexedFileStorage, sourceViewStorage,
           );
         }
 
         if (args.sourceName && args.path) {
           return await readByCoordinates(
             args.sourceName, args.path, args.startLine, args.endLine, args.context ?? 0,
-            sourceStorage, fileBlobStorage, indexedFileStorage, args.branch,
+            sourceStorage, fileBlobStorage, indexedFileStorage, sourceViewStorage, args.branch,
           );
         }
 
@@ -137,6 +139,7 @@ async function readByChunkId(
   sourceStorage: SourceStorage,
   fileBlobStorage: FileBlobStorage,
   indexedFileStorage: IndexedFileStorage,
+  sourceViewStorage: SourceViewStorage,
 ): Promise<ToolResult> {
   console.log(`[read_source] mode=chunkId, id=${chunkId}`);
 
@@ -148,11 +151,15 @@ async function readByChunkId(
   const chunk = chunks[0]!;
   const source = await sourceStorage.getById(chunk.source_id);
 
+  // FS fallback разрешён только для workspace view.
+  const view = await sourceViewStorage.getById(chunk.source_view_id);
+  const allowFsFallback = view?.view_kind === 'workspace';
+
   // Blob-backed чтение.
   const contentHash = await getFileContentHash(
     chunk.indexed_file_id, chunk.source_view_id, chunk.path, indexedFileStorage,
   );
-  const fileContent = await loadFileContent(contentHash, source?.path ?? null, chunk.path, fileBlobStorage);
+  const fileContent = await loadFileContent(contentHash, source?.path ?? null, chunk.path, fileBlobStorage, allowFsFallback);
 
   if (fileContent) {
     return formatFileFragment(fileContent, chunk.path, chunk.start_line ?? undefined, chunk.end_line ?? undefined, context, {
@@ -189,6 +196,7 @@ async function readByHeaderPath(
   sourceStorage: SourceStorage,
   fileBlobStorage: FileBlobStorage,
   indexedFileStorage: IndexedFileStorage,
+  sourceViewStorage: SourceViewStorage,
 ): Promise<ToolResult> {
   console.log(`[read_source] mode=headerPath, source=${sourceName}, path=${path}, header=${headerPath}`);
 
@@ -208,9 +216,13 @@ async function readByHeaderPath(
     return { content: [{ type: 'text', text: `No chunk found for headerPath "${headerPath}" in ${path}` }], isError: true };
   }
 
+  // FS fallback разрешён только для workspace view.
+  const view = await sourceViewStorage.getById(viewId);
+  const allowFsFallback = view?.view_kind === 'workspace';
+
   // Blob-backed чтение.
   const contentHash = await getFileContentHash(chunk.indexed_file_id, viewId, path, indexedFileStorage);
-  const fileContent = await loadFileContent(contentHash, source.path, path, fileBlobStorage);
+  const fileContent = await loadFileContent(contentHash, source.path, path, fileBlobStorage, allowFsFallback);
 
   if (fileContent) {
     return formatFileFragment(fileContent, path, chunk.start_line ?? undefined, chunk.end_line ?? undefined, 0, {
@@ -242,6 +254,7 @@ async function readByCoordinates(
   sourceStorage: SourceStorage,
   fileBlobStorage: FileBlobStorage,
   indexedFileStorage: IndexedFileStorage,
+  sourceViewStorage: SourceViewStorage,
   branch?: string,
 ): Promise<ToolResult> {
   console.log(`[read_source] mode=coordinates, source=${sourceName}, path=${path}, branch=${branch ?? 'active'}`);
@@ -252,13 +265,17 @@ async function readByCoordinates(
   }
 
   // Определяем viewId: по branch или active_view_id.
-  const viewId = source.active_view_id;
   // FS fallback запрещён для branch-чтений — иначе можно вернуть данные текущего checkout вместо запрошенной ветки.
   const isBranchRead = !!branch;
+  let viewId = source.active_view_id;
   if (branch) {
-    // TODO: lookup view by branch name через SourceViewStorage (доступен через DI в server.ts).
-    // Для координатного чтения используем active view как fallback.
-    console.log(`[read_source] branch=${branch} — используем active_view_id (branch lookup будет в следующей итерации)`);
+    const branchView = await sourceViewStorage.getRefView(source.id, 'branch', branch);
+    if (branchView) {
+      viewId = branchView.id;
+      console.log(`[read_source] branch=${branch} — resolved viewId=${viewId}`);
+    } else {
+      console.log(`[read_source] branch=${branch} — view not found, falling back to active_view_id`);
+    }
   }
 
   // Blob-backed чтение.

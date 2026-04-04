@@ -93,6 +93,15 @@ export class SourceViewStorage {
     return rows[0]!;
   }
 
+  // Возвращает view по id.
+  async getById(viewId: string): Promise<SourceViewRow | null> {
+    const rows = await this.sql<SourceViewRow[]>`
+      SELECT * FROM source_views WHERE id = ${viewId}
+    `;
+
+    return rows[0] ?? null;
+  }
+
   // Все views для источника.
   async listBySource(sourceId: string): Promise<SourceViewRow[]> {
     return await this.sql<SourceViewRow[]>`

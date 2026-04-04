@@ -47,7 +47,7 @@ export async function startMcpServer(config: AppConfig, sql: postgres.Sql): Prom
 
   // Регистрируем инструменты.
   registerSearchTool(server, coordinator);
-  registerReadSourceTool(server, chunkStorage, sourceStorage, fileBlobStorage, indexedFileStorage);
+  registerReadSourceTool(server, chunkStorage, sourceStorage, fileBlobStorage, indexedFileStorage, sourceViewStorage);
   registerListSourcesTool(server, sourceStorage, sourceViewStorage);
   registerStatusTool(server, sql, config);
 
