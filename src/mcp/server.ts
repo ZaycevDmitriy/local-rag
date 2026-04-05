@@ -5,7 +5,14 @@ import type postgres from 'postgres';
 import type { AppConfig } from '../config/index.js';
 import { createTextEmbedder } from '../embeddings/index.js';
 import { createReranker, SearchCoordinator } from '../search/index.js';
-import { ChunkStorage, SourceStorage } from '../storage/index.js';
+import {
+  ChunkStorage,
+  ChunkContentStorage,
+  FileBlobStorage,
+  IndexedFileStorage,
+  SourceStorage,
+  SourceViewStorage,
+} from '../storage/index.js';
 import { registerSearchTool } from './tools/search.js';
 import { registerReadSourceTool } from './tools/read-source.js';
 import { registerListSourcesTool } from './tools/list-sources.js';
@@ -18,9 +25,13 @@ export async function startMcpServer(config: AppConfig, sql: postgres.Sql): Prom
     version: '0.1.0',
   });
 
-  // Инициализируем зависимости.
+  // Инициализируем зависимости (branch-aware DI).
   const chunkStorage = new ChunkStorage(sql);
+  const chunkContentStorage = new ChunkContentStorage(sql);
+  const fileBlobStorage = new FileBlobStorage(sql);
+  const indexedFileStorage = new IndexedFileStorage(sql);
   const sourceStorage = new SourceStorage(sql);
+  const sourceViewStorage = new SourceViewStorage(sql);
   const embedder = createTextEmbedder(config.embeddings);
   const reranker = createReranker(config.reranker);
 
@@ -30,12 +41,14 @@ export async function startMcpServer(config: AppConfig, sql: postgres.Sql): Prom
     embedder,
     config.search,
     reranker,
+    chunkContentStorage,
+    sourceViewStorage,
   );
 
   // Регистрируем инструменты.
   registerSearchTool(server, coordinator);
-  registerReadSourceTool(server, chunkStorage, sourceStorage);
-  registerListSourcesTool(server, sourceStorage);
+  registerReadSourceTool(server, chunkStorage, sourceStorage, fileBlobStorage, indexedFileStorage, sourceViewStorage);
+  registerListSourcesTool(server, sourceStorage, sourceViewStorage);
   registerStatusTool(server, sql, config);
 
   // Подключаем stdio transport.

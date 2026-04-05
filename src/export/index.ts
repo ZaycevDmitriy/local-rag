@@ -1,5 +1,5 @@
 // Barrel-файл модуля экспорта/импорта.
-export type { Manifest, ManifestSource } from './manifest.js';
+export type { Manifest, ManifestSource, ManifestV1, ManifestV2, ManifestV2Source } from './manifest.js';
 export { writeManifest, readManifest, getSchemaVersion, getLocalRagVersion } from './manifest.js';
 
 export { sanitizeConfig } from './sanitizer.js';

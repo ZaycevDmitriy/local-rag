@@ -10,6 +10,7 @@ import { statusCommand } from './commands/status-cmd.js';
 import { exportCommand } from './commands/export-cmd.js';
 import { importCommand } from './commands/import-cmd.js';
 import { reEmbedCommand } from './commands/re-embed-cmd.js';
+import { gcCommand } from './commands/gc-cmd.js';
 
 const program = new Command()
   .name('rag')
@@ -24,5 +25,6 @@ program.addCommand(statusCommand);
 program.addCommand(exportCommand);
 program.addCommand(importCommand);
 program.addCommand(reEmbedCommand);
+program.addCommand(gcCommand);
 
 program.parse();

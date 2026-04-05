@@ -2,6 +2,9 @@
 export type {
   SearchQuery,
   ScoredChunk,
+  ScoredContent,
+  ScoredChunkOccurrence,
+  SearchFilters,
   ChunkCoordinates,
   ChunkScores,
   SearchResult,

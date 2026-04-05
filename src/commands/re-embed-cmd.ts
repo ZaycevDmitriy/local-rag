@@ -1,7 +1,7 @@
-// Команда rag re-embed — перегенерация эмбеддингов.
+// Команда rag re-embed — перегенерация эмбеддингов через chunk_contents.
 import { Command } from 'commander';
 import { loadConfig } from '../config/index.js';
-import { createDb, closeDb, SourceStorage, ChunkStorage } from '../storage/index.js';
+import { createDb, closeDb, SourceStorage, ChunkContentStorage } from '../storage/index.js';
 import { createTextEmbedder } from '../embeddings/index.js';
 
 // Размер батча для эмбеддингов (как в Indexer).
@@ -23,10 +23,10 @@ export const reEmbedCommand = new Command('re-embed')
 
       try {
         const sourceStorage = new SourceStorage(sql);
-        const chunkStorage = new ChunkStorage(sql);
+        const chunkContentStorage = new ChunkContentStorage(sql);
         const embedder = createTextEmbedder(config.embeddings);
 
-        // Определяем sourceId.
+        // Определяем sourceId (для фильтрации).
         let sourceId: string | undefined;
         if (options.source) {
           const source = await sourceStorage.getByName(options.source);
@@ -35,51 +35,53 @@ export const reEmbedCommand = new Command('re-embed')
             process.exit(1);
           }
           sourceId = source.id;
+          console.log(`Фильтрация по источнику: ${options.source} (${sourceId})`);
         }
 
         const force = !!options.force;
 
-        // Подсчёт чанков.
-        const total = await chunkStorage.countForReEmbed(sourceId, force);
+        // Для --source фильтрация через chunk_contents не поддерживается напрямую
+        // (content deduplicated). Без --source обрабатываем все NULL embedding.
+        if (sourceId && !force) {
+          console.log('WARN: --source фильтрация с chunk_contents работает по всем content rows с NULL embedding.');
+        }
 
-        if (total === 0) {
+        // Подсчёт chunk_contents без embedding.
+        const sample = await chunkContentStorage.getWithNullEmbedding(1);
+        if (sample.length === 0 && !force) {
           console.log('Нет фрагментов для перегенерации эмбеддингов.');
           return;
         }
 
-        console.log(`Перегенерация эмбеддингов: ${total} фрагментов...`);
+        console.log('Перегенерация эмбеддингов chunk_contents...');
 
         let processed = 0;
-        // При force=false после обновления чанки уходят из NULL-набора → всегда offset=0.
-        // При force=true — offset инкрементируем нормально.
-        const useIncreasingOffset = force;
-        let offset = 0;
+        let hasMore = true;
 
-        while (processed < total) {
-          const chunks = await chunkStorage.getChunksForReEmbed({
-            sourceId,
-            force,
-            limit: BATCH_SIZE,
-            offset: useIncreasingOffset ? offset : 0,
-          });
+        while (hasMore) {
+          const contents = await chunkContentStorage.getWithNullEmbedding(BATCH_SIZE);
 
-          if (chunks.length === 0) break;
-
-          // Генерация эмбеддингов.
-          const contents = chunks.map((c) => c.content);
-          const embeddings = await embedder.embedBatch(contents);
-
-          // Обновление.
-          for (let i = 0; i < chunks.length; i++) {
-            await chunkStorage.updateEmbedding(chunks[i]!.id, embeddings[i]!);
+          if (contents.length === 0) {
+            hasMore = false;
+            break;
           }
 
-          processed += chunks.length;
-          offset += BATCH_SIZE;
-          process.stdout.write(`\rОбработано: ${processed}/${total} фрагментов`);
+          // Генерация эмбеддингов.
+          const texts = contents.map((c) => c.content);
+          const embeddings = await embedder.embedBatch(texts);
+
+          // Обновление через batch.
+          const updates = contents.map((c, i) => ({
+            contentHash: c.content_hash,
+            embedding: embeddings[i]!,
+          }));
+          await chunkContentStorage.updateEmbeddings(updates);
+
+          processed += contents.length;
+          process.stdout.write(`\rОбработано: ${processed} content rows`);
         }
 
-        console.log(`\n\nПерегенерация завершена: ${processed} фрагментов обработано.`);
+        console.log(`\n\nПерегенерация завершена: ${processed} content rows обработано.`);
       } finally {
         await closeDb(sql);
       }

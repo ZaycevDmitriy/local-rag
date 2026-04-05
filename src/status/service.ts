@@ -8,13 +8,28 @@ export async function getSystemStatusSnapshot(
   sql: postgres.Sql,
   config: AppConfig,
 ): Promise<SystemStatusSnapshot> {
-  const [sourcesResult, chunksResult, lastIndexedResult, appliedMigrations] = await Promise.all([
+  const [
+    sourcesResult,
+    chunksResult,
+    lastIndexedResult,
+    appliedMigrations,
+    viewsResult,
+    fileBlobsResult,
+    fileBlobSizeResult,
+    chunkContentResult,
+    chunkContentEmbResult,
+  ] = await Promise.all([
     sql<Array<{ count: string }>>`SELECT COUNT(*)::text AS count FROM sources`,
     sql<Array<{ count: string }>>`SELECT COUNT(*)::text AS count FROM chunks`,
     sql<Array<{ last_indexed_at: Date | null }>>`
       SELECT MAX(last_indexed_at) AS last_indexed_at FROM sources
     `,
     getAppliedMigrations(sql),
+    sql<Array<{ count: string }>>`SELECT COUNT(*)::text AS count FROM source_views`,
+    sql<Array<{ count: string }>>`SELECT COUNT(*)::text AS count FROM file_blobs`,
+    sql<Array<{ total_bytes: string }>>`SELECT COALESCE(SUM(byte_size), 0)::text AS total_bytes FROM file_blobs`,
+    sql<Array<{ count: string }>>`SELECT COUNT(*)::text AS count FROM chunk_contents`,
+    sql<Array<{ count: string }>>`SELECT COUNT(*)::text AS count FROM chunk_contents WHERE embedding IS NOT NULL`,
   ]);
 
   return {
@@ -36,5 +51,10 @@ export async function getSystemStatusSnapshot(
       java: isTreeSitterSupported('Test.java') ? 'active' : 'fallback',
       kotlin: isTreeSitterSupported('Test.kt') ? 'active' : 'fallback',
     },
+    viewCount: parseInt(viewsResult[0]!.count, 10),
+    fileBlobCount: parseInt(fileBlobsResult[0]!.count, 10),
+    fileBlobSizeBytes: parseInt(fileBlobSizeResult[0]!.total_bytes, 10),
+    chunkContentCount: parseInt(chunkContentResult[0]!.count, 10),
+    chunkContentWithEmbeddingCount: parseInt(chunkContentEmbResult[0]!.count, 10),
   };
 }

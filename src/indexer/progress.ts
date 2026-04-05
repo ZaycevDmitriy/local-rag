@@ -9,6 +9,13 @@ export interface IndexResult {
   deletedFiles: number;
   unchangedFiles: number;
   duration: number;
+  // Branch-aware поля (Task 5).
+  reusedBlobCount?: number;
+  newBlobCount?: number;
+  reusedChunkContentCount?: number;
+  newChunkContentCount?: number;
+  embeddingsDeferred?: number;
+  strategy?: string;
 }
 
 // Интерфейс репортера прогресса.
@@ -19,6 +26,9 @@ export interface ProgressReporter {
   onEmbedProgress(current: number, total: number): void;
   onStoreComplete(): void;
   onComplete(result: IndexResult): void;
+  // Branch-aware callbacks (Task 5).
+  onBlobDedup?(reused: number, total: number): void;
+  onContentDedup?(reused: number, total: number): void;
 }
 
 // Вывод прогресса в консоль.
@@ -50,8 +60,28 @@ export class ConsoleProgress implements ProgressReporter {
 
   onComplete(result: IndexResult): void {
     const seconds = (result.duration / 1000).toFixed(1);
+    const strategyStr = result.strategy ? ` [${result.strategy}]` : '';
     console.log(
-      `  Готово: ${result.totalFiles} файлов, ${result.totalChunks} фрагментов за ${seconds}с`,
+      `  Готово: ${result.totalFiles} файлов, ${result.totalChunks} фрагментов за ${seconds}с${strategyStr}`,
     );
+
+    if (result.reusedBlobCount !== undefined) {
+      console.log(
+        `  Дедупликация: blobs=${result.reusedBlobCount} reused/${result.newBlobCount ?? 0} new, ` +
+        `contents=${result.reusedChunkContentCount ?? 0} reused/${result.newChunkContentCount ?? 0} new`,
+      );
+    }
+
+    if (result.embeddingsDeferred && result.embeddingsDeferred > 0) {
+      console.log(`  Эмбеддинги отложены: ${result.embeddingsDeferred} (rag re-embed для восстановления)`);
+    }
+  }
+
+  onBlobDedup(reused: number, total: number): void {
+    console.log(`  File blobs: ${reused} reused / ${total} total`);
+  }
+
+  onContentDedup(reused: number, total: number): void {
+    console.log(`  Chunk contents: ${reused} reused / ${total} total`);
   }
 }

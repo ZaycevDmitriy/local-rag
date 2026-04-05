@@ -1,18 +1,33 @@
-// Координатор поиска — оркестрирует BM25 + vector + RRF + rerank pipeline.
+// Координатор branch-aware поиска.
 import type { SearchConfig } from '../config/index.js';
 import type { TextEmbedder } from '../embeddings/index.js';
-import type { ChunkStorage, SourceRow, SourceStorage } from '../storage/index.js';
+import type {
+  ChunkStorage,
+  ChunkContentStorage,
+  SourceRow,
+  SourceStorage,
+  SourceViewStorage,
+} from '../storage/index.js';
 import { rrfFuse } from './hybrid.js';
 import type { Reranker } from './reranker/types.js';
-import type { SearchQuery, SearchResponse, SearchResult } from './types.js';
+import type {
+  SearchQuery,
+  SearchResponse,
+  SearchResult,
+  ScoredChunk,
+  SearchFilters,
+} from './types.js';
 
 // Максимальная длина snippet в символах.
 const SNIPPET_MAX_LENGTH = 500;
 
-// TTL кэша sources (мс). CLI и MCP — разные процессы, invalidation не нужна.
+// Порог narrow/broad mode: если content hashes < NARROW_THRESHOLD → exact search.
+const NARROW_THRESHOLD = 10_000;
+
+// TTL кэша sources (мс).
 const SOURCE_CACHE_TTL_MS = 5 * 60 * 1000;
 
-// Оркестратор hybrid search pipeline.
+// Оркестратор branch-aware hybrid search pipeline.
 export class SearchCoordinator {
   private sourceCache: Map<string, SourceRow> | null = null;
   private sourceCacheUpdatedAt = 0;
@@ -23,14 +38,213 @@ export class SearchCoordinator {
     private embedder: TextEmbedder,
     private searchConfig: SearchConfig,
     private reranker: Reranker,
+    // Branch-aware завис��мости (Task 7).
+    private chunkContentStorage?: ChunkContentStorage,
+    private sourceViewStorage?: SourceViewStorage,
   ) {}
 
-  // Выполняет hybrid search: embed -> parallel BM25 + vector -> RRF -> rerank -> результаты.
+  /**
+   * Branch-aware hybrid search pipeline:
+   * 1. Resolve view filters (active views / specific branch).
+   * 2. Determine narrow/broad mode.
+   * 3. Parallel BM25 + vector на content level.
+   * 4. Expand → occurrence-level dedup.
+   * 5. RRF fusion.
+   * 6. Rerank → final results.
+   */
   async search(query: SearchQuery): Promise<SearchResponse> {
-    // 1. Генерируем эмбеддинг запроса.
+    // Branch-aware path (если storage доступен).
+    if (this.chunkContentStorage && this.sourceViewStorage) {
+      return this.searchBranchAware(query);
+    }
+
+    // Legacy fallback (для обратной совместимости).
+    return this.searchLegacy(query);
+  }
+
+  // --- Branch-aware search. ---
+
+  private async searchBranchAware(query: SearchQuery): Promise<SearchResponse> {
+    // 1. Resolve view filters.
+    const filters = await this.resolveSearchFilters(query);
+    console.log(
+      `[search] branch-aware: views=${filters.sourceViewIds.length}, ` +
+      `sourceType=${filters.sourceType ?? 'all'}, pathPrefix=${filters.pathPrefix ?? 'none'}`,
+    );
+
+    if (filters.sourceViewIds.length === 0) {
+      return { results: [], totalCandidates: 0, retrievalMode: 'empty' };
+    }
+
+    // 2. Determine mode: get content hashes for narrow/broad decision.
+    const contentHashes = await this.chunkStorage.getContentHashes(filters);
+    const isNarrow = contentHashes.length < NARROW_THRESHOLD;
+    const mode = isNarrow ? 'narrow' : 'broad';
+
+    console.log(`[search] mode=${mode}, contentHashes=${contentHashes.length}`);
+
+    // 3. Embed query.
     const queryEmbedding = await this.embedder.embedQuery(query.query);
 
-    // 2. Параллельно запускаем BM25 и vector search.
+    // 4. Parallel BM25 + vector (content-level).
+    const topK = this.searchConfig.retrieveTopK;
+    const hashesForSearch = isNarrow ? contentHashes : undefined;
+
+    const [bm25Results, vectorResults] = await Promise.all([
+      this.chunkContentStorage!.searchBm25(query.query, topK, hashesForSearch),
+      this.chunkContentStorage!.searchVector(queryEmbedding, topK, hashesForSearch),
+    ]);
+
+    // 5. Collect all scored content hashes.
+    const allContentHashes = new Set([
+      ...bm25Results.map((r) => r.contentHash),
+      ...vectorResults.map((r) => r.contentHash),
+    ]);
+
+    if (allContentHashes.size === 0) {
+      return { results: [], totalCandidates: 0, retrievalMode: mode };
+    }
+
+    // 6. Resolve → occurrence-level (dedup: one per content_hash per view).
+    const occurrences = await this.chunkStorage.resolveOccurrences(
+      [...allContentHashes],
+      filters.sourceViewIds,
+      filters.sourceType,
+      filters.pathPrefix,
+    );
+
+    // Map contentHash → occurrence.
+    const hashToOccurrence = new Map(occurrences.map((o) => [o.chunk_content_hash, o]));
+
+    // 7. Convert content scores → occurrence-level ScoredChunk.
+    const bm25ScoreMap = new Map(bm25Results.map((r) => [r.contentHash, r.score]));
+    const vectorScoreMap = new Map(vectorResults.map((r) => [r.contentHash, r.score]));
+
+    const bm25Occurrences: ScoredChunk[] = [];
+    const vectorOccurrences: ScoredChunk[] = [];
+
+    for (const [contentHash, occ] of hashToOccurrence) {
+      const bm25Score = bm25ScoreMap.get(contentHash);
+      if (bm25Score !== undefined) {
+        bm25Occurrences.push({ id: occ.id, score: bm25Score });
+      }
+      const vectorScore = vectorScoreMap.get(contentHash);
+      if (vectorScore !== undefined) {
+        vectorOccurrences.push({ id: occ.id, score: vectorScore });
+      }
+    }
+
+    // Сортируем по score desc для правильного RRF ranking.
+    bm25Occurrences.sort((a, b) => b.score - a.score);
+    vectorOccurrences.sort((a, b) => b.score - a.score);
+
+    // 8. RRF fusion.
+    const fused = rrfFuse(
+      bm25Occurrences,
+      vectorOccurrences,
+      this.searchConfig.rrf.k,
+      this.searchConfig.bm25Weight,
+      this.searchConfig.vectorWeight,
+    );
+
+    const candidates = fused.slice(0, this.searchConfig.retrieveTopK);
+
+    // 9. Load chunks + rerank.
+    const chunkIds = candidates.map((r) => r.id);
+    const chunks = await this.chunkStorage.getByIds(chunkIds);
+    const sourceMap = await this.getSourceMap();
+
+    const rrfScoreMap = new Map(candidates.map((r) => [r.id, r.score]));
+
+    const finalTopK = query.topK ?? this.searchConfig.finalTopK;
+    const rerankDocs = chunks.map((chunk) => ({ id: chunk.id, content: chunk.content }));
+    const rerankResults = await this.reranker.rerank(query.query, rerankDocs, finalTopK);
+    const rerankScoreMap = new Map(rerankResults.map((r) => [r.id, r.score]));
+
+    // 10. Build results.
+    const chunkMap = new Map(chunks.map((c) => [c.id, c]));
+    const results: SearchResult[] = [];
+
+    for (const rerankResult of rerankResults) {
+      const chunk = chunkMap.get(rerankResult.id);
+      if (!chunk) continue;
+
+      const source = sourceMap.get(chunk.source_id);
+
+      results.push({
+        chunkId: chunk.id,
+        path: chunk.path,
+        sourceType: chunk.source_type,
+        sourceName: source?.name ?? 'unknown',
+        snippet: chunk.content.slice(0, SNIPPET_MAX_LENGTH),
+        coordinates: {
+          startLine: chunk.start_line ?? undefined,
+          endLine: chunk.end_line ?? undefined,
+          headerPath: chunk.header_path ?? undefined,
+          fqn: (chunk.metadata as Record<string, unknown>).fqn as string | undefined,
+          fragmentType: (chunk.metadata as Record<string, unknown>).fragmentType as string | undefined,
+        },
+        scores: {
+          bm25: bm25ScoreMap.get(chunk.chunk_content_hash) ?? null,
+          vector: vectorScoreMap.get(chunk.chunk_content_hash) ?? null,
+          rrf: rrfScoreMap.get(chunk.id) ?? 0,
+          rerank: rerankScoreMap.get(chunk.id) ?? null,
+        },
+      });
+    }
+
+    return {
+      results,
+      totalCandidates: fused.length,
+      retrievalMode: mode,
+    };
+  }
+
+  /**
+   * Resolves search filters: source_view_ids from active views or specific branch.
+   */
+  private async resolveSearchFilters(query: SearchQuery): Promise<SearchFilters> {
+    const viewIds: string[] = [];
+
+    if (query.branch) {
+      // Ищем view по branch name.
+      const sources = await this.sourceStorage.getAll();
+      for (const source of sources) {
+        if (query.sourceId && source.id !== query.sourceId) continue;
+
+        const view = await this.sourceViewStorage!.getRefView(source.id, 'branch', query.branch);
+        if (view) {
+          viewIds.push(view.id);
+        }
+      }
+
+      console.log(`[search] resolved branch="${query.branch}": ${viewIds.length} views`);
+    } else {
+      // Default: active views.
+      const sources = await this.sourceStorage.getAll();
+      for (const source of sources) {
+        if (query.sourceId && source.id !== query.sourceId) continue;
+
+        if (source.active_view_id) {
+          viewIds.push(source.active_view_id);
+        }
+      }
+
+      console.log(`[search] resolved active views: ${viewIds.length}`);
+    }
+
+    return {
+      sourceViewIds: viewIds,
+      sourceType: query.sourceType,
+      pathPrefix: query.pathPrefix,
+    };
+  }
+
+  // --- Legacy search (backward-compatible). ---
+
+  private async searchLegacy(query: SearchQuery): Promise<SearchResponse> {
+    const queryEmbedding = await this.embedder.embedQuery(query.query);
+
     const [bm25Results, vectorResults] = await Promise.all([
       this.chunkStorage.searchBm25(
         query.query,
@@ -48,7 +262,6 @@ export class SearchCoordinator {
       ),
     ]);
 
-    // 3. Объединяем результаты через RRF.
     const fused = rrfFuse(
       bm25Results,
       vectorResults,
@@ -57,39 +270,26 @@ export class SearchCoordinator {
       this.searchConfig.vectorWeight,
     );
 
-    // 4. Берём retrieveTopK кандидатов для реранкера.
     const candidates = fused.slice(0, this.searchConfig.retrieveTopK);
-
-    // 5. Загружаем полные данные чанков (один раз для реранкера и финального ответа).
     const chunkIds = candidates.map((r) => r.id);
     const chunks = await this.chunkStorage.getByIds(chunkIds);
-
-    // 6. Загружаем источники из кэша (TTL 5 мин).
     const sourceMap = await this.getSourceMap();
 
-    // 7. Строим карты оценок для BM25, vector и RRF.
     const bm25ScoreMap = new Map(bm25Results.map((r) => [r.id, r.score]));
     const vectorScoreMap = new Map(vectorResults.map((r) => [r.id, r.score]));
     const rrfScoreMap = new Map(candidates.map((r) => [r.id, r.score]));
 
-    // 8. Переранжируем кандидатов.
     const topK = query.topK ?? this.searchConfig.finalTopK;
-    const rerankDocs = chunks.map((chunk) => ({
-      id: chunk.id,
-      content: chunk.content,
-    }));
+    const rerankDocs = chunks.map((chunk) => ({ id: chunk.id, content: chunk.content }));
     const rerankResults = await this.reranker.rerank(query.query, rerankDocs, topK);
     const rerankScoreMap = new Map(rerankResults.map((r) => [r.id, r.score]));
 
-    // 9. Собираем итоговые результаты в порядке реранкера.
     const chunkMap = new Map(chunks.map((c) => [c.id, c]));
     const results: SearchResult[] = [];
 
     for (const rerankResult of rerankResults) {
       const chunk = chunkMap.get(rerankResult.id);
-      if (!chunk) {
-        continue;
-      }
+      if (!chunk) continue;
 
       const metadata = chunk.metadata as Record<string, unknown>;
       const source = sourceMap.get(chunk.source_id);
@@ -118,10 +318,7 @@ export class SearchCoordinator {
       });
     }
 
-    return {
-      results,
-      totalCandidates: fused.length,
-    };
+    return { results, totalCandidates: fused.length };
   }
 
   // Возвращает кэшированную Map sources с TTL.

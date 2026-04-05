@@ -14,6 +14,9 @@ function makeSource(overrides: Partial<SourceRow> = {}): SourceRow {
     path: '/test',
     git_url: null,
     git_branch: null,
+    repo_root_path: null,
+    repo_subpath: null,
+    active_view_id: null,
     config: {},
     last_indexed_at: null,
     chunk_count: 0,
@@ -27,12 +30,23 @@ function makeSource(overrides: Partial<SourceRow> = {}): SourceRow {
 function makeChunk(id: string, sourceId = 'src-1'): ChunkRow {
   return {
     id,
+    source_view_id: 'view-1',
+    indexed_file_id: 'file-1',
+    chunk_content_hash: 'hash',
+    path: `src/${id}.ts`,
+    source_type: 'code',
+    start_line: 1,
+    end_line: 10,
+    header_path: null,
+    language: 'typescript',
+    ordinal: 0,
+    metadata: { sourceType: 'code', startLine: 1, endLine: 10 },
+    created_at: new Date(),
+    // @deprecated — backward-compatible поля.
     source_id: sourceId,
     content: `content of ${id}`,
     content_hash: 'hash',
-    metadata: { path: `src/${id}.ts`, sourceType: 'code', startLine: 1, endLine: 10 },
     embedding: null,
-    created_at: new Date(),
   };
 }
 

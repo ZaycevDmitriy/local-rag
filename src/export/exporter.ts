@@ -1,4 +1,4 @@
-// Ядро экспорта: запрос данных из БД → SQL INSERT → архив.
+// Ядро экспорта v2: 6 таблиц branch-aware schema → SQL INSERT → архив.
 import { mkdtemp, mkdir, writeFile, appendFile, rm, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -8,19 +8,8 @@ import { sanitizeConfig } from './sanitizer.js';
 import { packArchive } from './archive.js';
 import type { Manifest, ManifestSource } from './manifest.js';
 
-// Размер батча для чтения чанков из БД.
-const CHUNK_BATCH_SIZE = 1000;
-
-// Строка чанка при экспорте.
-interface ExportChunkRow {
-  id: string;
-  source_id: string;
-  content: string;
-  content_hash: string;
-  metadata: Record<string, unknown>;
-  embedding: number[] | null;
-  created_at: Date;
-}
+// Размер батча для keyset pagination.
+const BATCH_SIZE = 1000;
 
 export interface ExportOptions {
   sql: postgres.Sql;
@@ -29,7 +18,7 @@ export interface ExportOptions {
   compress: boolean;
   outputPath: string;
   configPath: string | null;
-  onProgress?: (sourceName: string, current: number, total: number) => void;
+  onProgress?: (sourceName: string, table: string, current: number, total: number) => void;
 }
 
 export interface ExportResult {
@@ -41,21 +30,10 @@ export interface ExportResult {
 
 // Экранирует значение для SQL INSERT.
 export function escapeValue(value: unknown): string {
-  if (value === null || value === undefined) {
-    return 'NULL';
-  }
-
-  if (typeof value === 'boolean') {
-    return value ? 'TRUE' : 'FALSE';
-  }
-
-  if (typeof value === 'number') {
-    return String(value);
-  }
-
-  if (value instanceof Date) {
-    return `'${value.toISOString()}'`;
-  }
+  if (value === null || value === undefined) return 'NULL';
+  if (typeof value === 'boolean') return value ? 'TRUE' : 'FALSE';
+  if (typeof value === 'number') return String(value);
+  if (value instanceof Date) return `'${value.toISOString()}'`;
 
   // Массив чисел — pgvector литерал.
   if (Array.isArray(value) && value.length > 0 && typeof value[0] === 'number') {
@@ -68,7 +46,7 @@ export function escapeValue(value: unknown): string {
     return `'${json.replace(/'/g, '\'\'')}'::jsonb`;
   }
 
-  // Строка — экранируем спецсимволы для однострочного SQL (E-string синтаксис PostgreSQL).
+  // Строка — E-string синтаксис PostgreSQL.
   const str = String(value);
   const escaped = str
     .replace(/\\/g, '\\\\')
@@ -86,7 +64,7 @@ export function generateInsert(table: string, row: Record<string, unknown>): str
   return `INSERT INTO ${table} (${columns.join(', ')}) VALUES (${values.join(', ')});`;
 }
 
-// Экспортирует данные из БД в архив.
+// Экспортирует данные v2 из БД в архив.
 export async function exportData(options: ExportOptions): Promise<ExportResult> {
   const { sql, sourceIds, includeEmbeddings, compress, outputPath, configPath, onProgress } = options;
 
@@ -99,148 +77,149 @@ export async function exportData(options: ExportOptions): Promise<ExportResult> 
 
   try {
     for (const sourceId of sourceIds) {
-      // Загружаем источник.
+      // Загружаем source.
       const [source] = await sql<Array<{
-        id: string;
-        name: string;
-        type: string;
-        path: string | null;
-        git_url: string | null;
-        git_branch: string | null;
-        config: Record<string, unknown>;
-        last_indexed_at: Date | null;
-        chunk_count: number;
-        created_at: Date;
-        updated_at: Date;
+        id: string; name: string; type: string; path: string | null;
+        git_url: string | null; repo_root_path: string | null; repo_subpath: string | null;
+        active_view_id: string | null; config: Record<string, unknown>;
+        last_indexed_at: Date | null; created_at: Date; updated_at: Date;
       }>>`SELECT * FROM sources WHERE id = ${sourceId}`;
 
       if (!source) continue;
 
       const sqlFilePath = join(dataDir, `${source.name}.sql`);
-      const header = `-- Source: ${source.name}\n-- Exported: ${new Date().toISOString()}\n\n`;
+      const header = `-- Source: ${source.name} (v2 branch-aware)\n-- Exported: ${new Date().toISOString()}\n\n`;
       await writeFile(sqlFilePath, header, 'utf-8');
 
-      // INSERT для sources.
-      const sourceInsert = generateInsert('sources', {
-        id: source.id,
-        name: source.name,
-        type: source.type,
-        path: source.path,
-        git_url: source.git_url,
-        git_branch: source.git_branch,
-        config: source.config,
-        last_indexed_at: source.last_indexed_at,
-        chunk_count: source.chunk_count,
-        created_at: source.created_at,
-        updated_at: source.updated_at,
-      });
-      await appendFile(sqlFilePath, `-- Source record\n${sourceInsert}\n\n`, 'utf-8');
+      // 1. INSERT sources.
+      await appendFile(sqlFilePath, '-- sources\n', 'utf-8');
+      await appendFile(sqlFilePath, generateInsert('sources', {
+        id: source.id, name: source.name, type: source.type, path: source.path,
+        git_url: source.git_url, repo_root_path: source.repo_root_path,
+        repo_subpath: source.repo_subpath, active_view_id: source.active_view_id,
+        config: source.config, last_indexed_at: source.last_indexed_at,
+        created_at: source.created_at, updated_at: source.updated_at,
+      }) + '\n\n', 'utf-8');
 
-      // Чанки батчами (keyset pagination по (created_at, id) — стабильнее OFFSET для крупных таблиц).
-      let sourceChunks = 0;
-      let hasEmbeddings = false;
-      let cursorCreatedAt: Date | null = null;
-      let cursorId: string | null = null;
-
-      // Подсчёт общего количества чанков.
-      const [countResult] = await sql<[{ count: string }]>`
-        SELECT COUNT(*)::text AS count FROM chunks WHERE source_id = ${sourceId}
+      // 2. INSERT source_views.
+      const views = await sql<Array<Record<string, unknown>>>`
+        SELECT * FROM source_views WHERE source_id = ${sourceId} ORDER BY created_at
       `;
-      const totalSourceChunks = parseInt(countResult!.count, 10);
+      await appendFile(sqlFilePath, `-- source_views (${views.length})\n`, 'utf-8');
+      for (const view of views) {
+        await appendFile(sqlFilePath, generateInsert('source_views', view) + '\n', 'utf-8');
+      }
 
-      await appendFile(sqlFilePath, `-- Chunks (${totalSourceChunks} records)\n`, 'utf-8');
+      // 3. Собираем view IDs для фильтрации.
+      const viewIds = views.map((v) => v.id as string);
 
-      while (true) {
-        // Keyset pagination: используем >= для created_at и исключаем уже обработанный cursorId,
-        // чтобы не пропустить строки с одинаковым created_at но меньшим UUID.
-        const chunks: ExportChunkRow[] = cursorCreatedAt && cursorId
-          ? await sql<ExportChunkRow[]>`
-              SELECT id, source_id, content, content_hash, metadata, embedding, created_at
-              FROM chunks
-              WHERE source_id = ${sourceId}
-                AND (created_at > ${cursorCreatedAt}
-                  OR (created_at = ${cursorCreatedAt} AND id > ${cursorId}))
-              ORDER BY created_at, id
-              LIMIT ${CHUNK_BATCH_SIZE}
-            `
-          : await sql<ExportChunkRow[]>`
-              SELECT id, source_id, content, content_hash, metadata, embedding, created_at
-              FROM chunks
-              WHERE source_id = ${sourceId}
-              ORDER BY created_at, id
-              LIMIT ${CHUNK_BATCH_SIZE}
-            `;
+      // 4. INSERT file_blobs (уникальные через indexed_files для этого source).
+      const fileBlobs = await sql<Array<Record<string, unknown>>>`
+        SELECT DISTINCT fb.* FROM file_blobs fb
+        INNER JOIN indexed_files inf ON inf.content_hash = fb.content_hash
+        INNER JOIN source_views sv ON sv.id = inf.source_view_id
+        WHERE sv.source_id = ${sourceId}
+      `;
+      await appendFile(sqlFilePath, `\n-- file_blobs (${fileBlobs.length})\n`, 'utf-8');
+      for (const blob of fileBlobs) {
+        await appendFile(sqlFilePath, generateInsert('file_blobs', blob) + '\n', 'utf-8');
+      }
+      onProgress?.(source.name, 'file_blobs', fileBlobs.length, fileBlobs.length);
 
-        if (chunks.length === 0) break;
+      // 5. INSERT indexed_files.
+      if (viewIds.length > 0) {
+        const indexedFiles = await sql<Array<Record<string, unknown>>>`
+          SELECT * FROM indexed_files WHERE source_view_id = ANY(${viewIds}) ORDER BY indexed_at
+        `;
+        await appendFile(sqlFilePath, `\n-- indexed_files (${indexedFiles.length})\n`, 'utf-8');
+        for (const file of indexedFiles) {
+          await appendFile(sqlFilePath, generateInsert('indexed_files', file) + '\n', 'utf-8');
+        }
+      }
 
-        // Обновляем курсор на последний элемент.
-        const lastChunk = chunks[chunks.length - 1]!;
-        cursorCreatedAt = lastChunk.created_at;
-        cursorId = lastChunk.id;
+      // 6. INSERT chunk_contents (уникальные через chunks).
+      const chunkContents = await sql<Array<{
+        content_hash: string; content: string; embedding: number[] | null; created_at: Date;
+      }>>`
+        SELECT DISTINCT cc.content_hash, cc.content, cc.embedding, cc.created_at
+        FROM chunk_contents cc
+        INNER JOIN chunks c ON c.chunk_content_hash = cc.content_hash
+        INNER JOIN source_views sv ON sv.id = c.source_view_id
+        WHERE sv.source_id = ${sourceId}
+      `;
+      let hasEmbeddings = false;
+      await appendFile(sqlFilePath, `\n-- chunk_contents (${chunkContents.length})\n`, 'utf-8');
+      for (const cc of chunkContents) {
+        if (cc.embedding && cc.embedding.length > 0) hasEmbeddings = true;
+        await appendFile(sqlFilePath, generateInsert('chunk_contents', {
+          content_hash: cc.content_hash,
+          content: cc.content,
+          embedding: includeEmbeddings ? cc.embedding : null,
+          // search_vector — generated column, пропускаем.
+          created_at: cc.created_at,
+        }) + '\n', 'utf-8');
+      }
+      onProgress?.(source.name, 'chunk_contents', chunkContents.length, chunkContents.length);
 
-        for (const chunk of chunks) {
-          if (chunk.embedding && chunk.embedding.length > 0) {
-            hasEmbeddings = true;
+      // 7. INSERT chunks (keyset pagination).
+      let chunkCount = 0;
+      if (viewIds.length > 0) {
+        const [countResult] = await sql<[{ count: string }]>`
+          SELECT COUNT(*)::text AS count FROM chunks WHERE source_view_id = ANY(${viewIds})
+        `;
+        const totalSourceChunks = parseInt(countResult!.count, 10);
+        await appendFile(sqlFilePath, `\n-- chunks (${totalSourceChunks})\n`, 'utf-8');
+
+        let cursorCreatedAt: Date | null = null;
+        let cursorId: string | null = null;
+
+        while (true) {
+          const chunks: Array<Record<string, unknown>> = cursorCreatedAt && cursorId
+            ? await sql<Array<Record<string, unknown>>>`
+                SELECT * FROM chunks
+                WHERE source_view_id = ANY(${viewIds})
+                  AND (created_at > ${cursorCreatedAt} OR (created_at = ${cursorCreatedAt} AND id > ${cursorId}))
+                ORDER BY created_at, id LIMIT ${BATCH_SIZE}
+              `
+            : await sql<Array<Record<string, unknown>>>`
+                SELECT * FROM chunks WHERE source_view_id = ANY(${viewIds})
+                ORDER BY created_at, id LIMIT ${BATCH_SIZE}
+              `;
+
+          if (chunks.length === 0) break;
+
+          const last = chunks[chunks.length - 1]!;
+          cursorCreatedAt = last.created_at as Date;
+          cursorId = last.id as string;
+
+          for (const chunk of chunks) {
+            await appendFile(sqlFilePath, generateInsert('chunks', chunk) + '\n', 'utf-8');
           }
 
-          const insert = generateInsert('chunks', {
-            id: chunk.id,
-            source_id: chunk.source_id,
-            content: chunk.content,
-            content_hash: chunk.content_hash,
-            metadata: chunk.metadata,
-            embedding: includeEmbeddings ? chunk.embedding : null,
-            created_at: chunk.created_at,
-          });
-          await appendFile(sqlFilePath, insert + '\n', 'utf-8');
-        }
-
-        sourceChunks += chunks.length;
-        onProgress?.(source.name, sourceChunks, totalSourceChunks);
-      }
-
-      // Indexed files.
-      const indexedFiles = await sql<Array<{
-        id: string;
-        source_id: string;
-        path: string;
-        file_hash: string;
-        indexed_at: Date;
-      }>>`
-        SELECT * FROM indexed_files WHERE source_id = ${sourceId}
-      `;
-
-      if (indexedFiles.length > 0) {
-        await appendFile(sqlFilePath, `\n-- Indexed files (${indexedFiles.length} records)\n`, 'utf-8');
-
-        for (const file of indexedFiles) {
-          const insert = generateInsert('indexed_files', {
-            id: file.id,
-            source_id: file.source_id,
-            path: file.path,
-            file_hash: file.file_hash,
-            indexed_at: file.indexed_at,
-          });
-          await appendFile(sqlFilePath, insert + '\n', 'utf-8');
+          chunkCount += chunks.length;
+          onProgress?.(source.name, 'chunks', chunkCount, totalSourceChunks);
         }
       }
 
-      totalChunks += sourceChunks;
+      totalChunks += chunkCount;
       manifestSources.push({
         name: source.name,
         type: source.type as 'local' | 'git',
         path: source.path,
-        chunksCount: sourceChunks,
+        viewCount: views.length,
+        chunkCount,
+        fileBlobCount: fileBlobs.length,
+        chunkContentCount: chunkContents.length,
         hasEmbeddings: includeEmbeddings && hasEmbeddings,
       });
     }
 
-    // Манифест.
+    // Манифест v2.
     const schemaVersion = await getSchemaVersion(sql);
     const localRagVersion = await getLocalRagVersion();
 
     const manifest: Manifest = {
-      version: 1,
+      version: 2,
       schemaVersion,
       createdAt: new Date().toISOString(),
       localRagVersion,
@@ -257,8 +236,6 @@ export async function exportData(options: ExportOptions): Promise<ExportResult> 
 
     // Упаковка.
     await packArchive(tmpDir, outputPath, compress);
-
-    // Размер файла.
     const archiveStat = await stat(outputPath);
 
     return {

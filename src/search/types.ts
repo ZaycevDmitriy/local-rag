@@ -7,6 +7,15 @@ export interface SearchQuery {
   sourceId?: string;
   sourceType?: string;
   pathPrefix?: string;
+  // Branch-aware (Task 7).
+  branch?: string;
+}
+
+// Фильтры для branch-aware search (occurrence-level).
+export interface SearchFilters {
+  sourceViewIds: string[];
+  sourceType?: string;
+  pathPrefix?: string;
 }
 
 // Фрагмент с оценкой (промежуточный результат).
@@ -15,7 +24,22 @@ export interface ScoredChunk {
   score: number;
 }
 
-// Координаты фрагмента в исходном файле.
+// Результат content-level search (BM25/vector).
+export interface ScoredContent {
+  contentHash: string;
+  score: number;
+}
+
+// Occurrence-level результат после expand + dedup.
+export interface ScoredChunkOccurrence {
+  chunkId: string;
+  chunkContentHash: string;
+  path: string;
+  ordinal: number;
+  score: number;
+}
+
+// Координа��ы фрагмента в исходном файле.
 export interface ChunkCoordinates {
   startLine?: number;
   endLine?: number;
@@ -43,10 +67,15 @@ export interface SearchResult {
   snippet: string;
   coordinates: ChunkCoordinates;
   scores: ChunkScores;
+  // Branch-aware metadata (Task 7).
+  viewKind?: string;
+  refName?: string;
 }
 
-// Ответ поиска с мета-информацией.
+// Отв��т поиск�� с мета-информацией.
 export interface SearchResponse {
   results: SearchResult[];
   totalCandidates: number;
+  // Branch-aware metadata (Task 7).
+  retrievalMode?: string;
 }
