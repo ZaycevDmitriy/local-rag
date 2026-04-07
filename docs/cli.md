@@ -16,7 +16,8 @@
 | `rag status` | Статус системы: БД, провайдеры, статистика |
 | `rag export` | Экспорт источников в портативный архив (.tar.gz) |
 | `rag import <file>` | Импорт источников из архива |
-| `rag re-embed` | Генерация эмбеддингов для чанков с NULL embedding |
+| `rag re-embed` | Генерация эмбеддингов для chunk_contents с NULL embedding |
+| `rag gc` | Очистка orphan file_blobs и chunk_contents (grace period) |
 
 ## Опции index
 
@@ -43,7 +44,7 @@ rag export --no-compress           # Без gzip-сжатия (.tar)
 rag export --output backup.tar.gz  # Путь к выходному файлу
 ```
 
-Формат архива: `.tar.gz` с `manifest.json`, `config.yaml` (санитизированный, без секретов) и SQL-файлами для каждого источника.
+Формат архива v2: `.tar.gz` с `manifest.json` (version: 2), `config.yaml` (санитизированный, без секретов) и SQL-файлами для 6 таблиц каждого источника (sources, source_views, file_blobs, indexed_files, chunk_contents, chunks).
 
 ### rag import
 
@@ -54,17 +55,25 @@ rag import backup.tar.gz --force            # Перезаписать без в
 rag import backup.tar.gz --remap-path /old=/new  # Замена базового пути
 ```
 
-При импорте проверяется совпадение версии схемы БД. Если источник уже существует — запрашивается подтверждение (или `--force`).
+При импорте проверяется совпадение версии схемы БД. Архивы v1 отклоняются с рекомендацией переиндексации. Если источник уже существует — запрашивается подтверждение (или `--force`).
 
 ### rag re-embed
 
 ```bash
-rag re-embed                       # Все чанки с NULL embedding
+rag re-embed                       # Все chunk_contents с NULL embedding
 rag re-embed --source my-project   # Только конкретный источник
 rag re-embed --force               # Перегенерировать ВСЕ (включая существующие)
 ```
 
-Типичные сценарии: после импорта с `--no-embeddings`, при смене провайдера (Jina -> OpenAI) через `--force`.
+Работает через `ChunkContentStorage` — генерирует эмбеддинги для дедуплицированных `chunk_contents`, а не для individual chunk rows. Типичные сценарии: после импорта с `--no-embeddings`, при смене провайдера (Jina -> OpenAI) через `--force`.
+
+### rag gc
+
+```bash
+rag gc                             # Очистка orphan file_blobs и chunk_contents
+```
+
+Удаляет `file_blobs` и `chunk_contents`, на которые нет ссылок из `indexed_files` и `chunks` соответственно. Применяет grace period для защиты от гонок с активной индексацией. Запускать периодически после удаления источников или индексации новых веток.
 
 ## See Also
 

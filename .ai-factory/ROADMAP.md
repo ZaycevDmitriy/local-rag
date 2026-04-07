@@ -22,6 +22,7 @@
 - [x] **Config path resolution** — --config arg, RAG_CONFIG env var, resolveConfigPath
 - [x] **Export/Import/Re-embed** — tar.gz архивы, SQL export/import, перегенерация эмбеддингов
 - [x] **Optimization & reliability** — retry/overlap/concurrency утилиты, parallel embeddings, source cache, metadata indexes, keyset pagination, unit tests (381)
+- [x] **Branch-aware indexing** — source_views (branch/workspace snapshots), file_blobs + chunk_contents (dedup), narrow/broad vector search, rag gc, export/import v2
 
 ## Completed
 
@@ -37,3 +38,4 @@
 | Config path resolution | 2026-01-20 |
 | Export/Import/Re-embed | 2026-02-15 |
 | Optimization & reliability | 2026-03-14 |
+| Branch-aware indexing | 2026-04-05 |

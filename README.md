@@ -8,12 +8,13 @@
 
 ## Возможности
 
-- **Hybrid search** — BM25 + векторный поиск через Reciprocal Rank Fusion + Jina Reranker
+- **Branch-aware индексация** — независимые снимки по git-веткам с дедупликацией контента и эмбеддингов
+- **Hybrid search** — BM25 + векторный поиск (narrow/broad modes) через RRF fusion + Jina Reranker
 - **AST-aware chunking** — tree-sitter разбивает код на семантические блоки (функции, классы, методы)
-- **Инкрементальная индексация** — SHA-256 хэши, переиндексируются только изменённые файлы
-- **MCP-сервер** — 4 инструмента для AI-агентов: `search`, `read_source`, `list_sources`, `status`
+- **MCP-сервер** — 4 инструмента для AI-агентов с поддержкой `branch` параметра для поиска по веткам
 - **Переключаемые провайдеры** — Jina, OpenAI, SiliconFlow для embeddings; Jina и SiliconFlow для rerank
-- **Export / Import** — портативный backup в `.tar.gz`, перенос данных, re-embed при смене провайдера
+- **Export / Import v2** — портативный backup в `.tar.gz` (6-table schema), re-embed при смене провайдера
+- **Garbage collection** — `rag gc` для очистки orphan blobs после удаления веток
 
 ## Quick Start
 
