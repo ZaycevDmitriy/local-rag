@@ -2,8 +2,9 @@
 import { Command } from 'commander';
 import { checkbox } from '@inquirer/prompts';
 import { loadConfig, resolveConfigPath } from '../config/index.js';
-import { createDb, closeDb, SourceStorage } from '../storage/index.js';
+import { createDb, closeDb, SourceStorage, SourceViewStorage } from '../storage/index.js';
 import { exportData } from '../export/index.js';
+import { sumChunksForSource } from './_helpers/chunk-count.js';
 
 // Форматирование размера файла.
 function formatSize(bytes: number): string {
@@ -36,12 +37,26 @@ export const exportCommand = new Command('export')
 
       try {
         const sourceStorage = new SourceStorage(sql);
+        const sourceViewStorage = new SourceViewStorage(sql);
         const allSources = await sourceStorage.getAll();
 
         if (allSources.length === 0) {
           console.log('Нет источников для экспорта.');
           return;
         }
+
+        // Предрасчёт числа фрагментов по всем source_views (миграция 005 — sources.chunk_count удалён).
+        const chunkCounts = new Map<string, number>();
+        await Promise.all(
+          allSources.map(async (s) => {
+            const count = await sumChunksForSource(sourceViewStorage, s.id);
+            chunkCounts.set(s.id, count);
+          }),
+        );
+
+        console.error(
+          `[FIX:export-dry-run] aggregated chunk counts for ${allSources.length} sources`,
+        );
 
         // Определяем источники для экспорта.
         let selectedIds: string[];
@@ -63,7 +78,7 @@ export const exportCommand = new Command('export')
           selectedIds = await checkbox({
             message: 'Выберите источники для экспорта:',
             choices: allSources.map((s) => ({
-              name: `${s.name} (${s.chunk_count} фрагментов)`,
+              name: `${s.name} (${chunkCounts.get(s.id) ?? 0} фрагментов)`,
               value: s.id,
               checked: true,
             })),
@@ -81,8 +96,9 @@ export const exportCommand = new Command('export')
           let totalChunks = 0;
           for (const id of selectedIds) {
             const source = allSources.find((s) => s.id === id)!;
-            console.log(`  ${source.name} (${source.chunk_count} фрагментов)`);
-            totalChunks += source.chunk_count;
+            const count = chunkCounts.get(id) ?? 0;
+            console.log(`  ${source.name} (${count} фрагментов)`);
+            totalChunks += count;
           }
           console.log(`\nВсего: ${selectedIds.length} источников, ${totalChunks} фрагментов`);
           console.log(`Эмбеддинги: ${options.embeddings ? 'включены' : 'исключены'}`);
