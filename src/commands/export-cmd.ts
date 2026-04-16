@@ -54,10 +54,6 @@ export const exportCommand = new Command('export')
           }),
         );
 
-        console.error(
-          `[FIX:export-dry-run] aggregated chunk counts for ${allSources.length} sources`,
-        );
-
         // Определяем источники для экспорта.
         let selectedIds: string[];
 

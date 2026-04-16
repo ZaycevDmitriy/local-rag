@@ -250,6 +250,8 @@ export class SearchCoordinator {
   }
 
   // Резолвит sourceName в sourceId. Проверяет конфликт sourceId+sourceName.
+  // После резолва sourceName вычищается из результата, чтобы вниз по pipeline
+  // шёл единообразный фильтр по sourceId.
   private async resolveSourceNameFilter(query: SearchQuery): Promise<SearchQuery> {
     if (!query.sourceName) return query;
 
@@ -262,7 +264,9 @@ export class SearchCoordinator {
       throw new Error(`Source "${query.sourceName}" not found`);
     }
 
-    return { ...query, sourceId: source.id };
+    const resolved: SearchQuery = { ...query, sourceId: source.id };
+    delete resolved.sourceName;
+    return resolved;
   }
 
   // --- Legacy search (backward-compatible). ---

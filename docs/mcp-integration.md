@@ -65,7 +65,7 @@
 
 | Инструмент | Описание |
 |------------|----------|
-| `search` | Branch-aware гибридный поиск. Параметры: `query`, `topK` (1-100, по умолчанию 10), `sourceId`, `sourceType` (code/markdown/text/pdf), `pathPrefix`, `branch` (optional — поиск по конкретной ветке вместо active view) |
+| `search` | Branch-aware гибридный поиск. Параметры: `query`, `topK` (1-100, по умолчанию 10), `sourceId` или `sourceName` (взаимоисключающие; неизвестный `sourceName` и одновременная передача обоих возвращают `isError: true`), `sourceType` (code/markdown/text/pdf), `pathPrefix`, `branch` (optional — поиск по конкретной ветке вместо active view) |
 | `read_source` | Чтение из blob-backed snapshot по `chunkId`, по координатам (`sourceName` + `path` + `startLine`/`endLine`), по заголовку (`headerPath`), или с параметром `branch` для неактивной ветки. Fallback на FS если blob не найден |
 | `list_sources` | Список источников с view metadata (viewKind, refName, chunk/file count per view). Фильтры: `sourceType` (local/git), `pathPrefix`, `limit` |
 | `status` | Статус системы: `schemaVersion`, `totalSources`/`totalChunks`, `viewCount`, `fileBlobCount`, `fileBlobSizeBytes`, `chunkContentCount`, `chunkContentWithEmbeddingCount`, провайдеры, `lastIndexedAt` |
