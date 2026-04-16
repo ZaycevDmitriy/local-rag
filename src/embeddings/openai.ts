@@ -151,7 +151,7 @@ export class OpenAITextEmbedder implements TextEmbedder {
       }
     }
 
-    console.log(`[OpenAITextEmbedder] Response validated: ${json.data.length} embeddings`);
+    console.error(`[OpenAITextEmbedder] Response validated: ${json.data.length} embeddings`);
 
     // Сортируем по index для гарантии порядка.
     const sorted = [...json.data].sort((a, b) => a.index - b.index);

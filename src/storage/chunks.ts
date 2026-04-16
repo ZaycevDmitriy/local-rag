@@ -183,7 +183,7 @@ export class ChunkStorage {
         ${pathPrefix ? this.sql`AND path LIKE ${pathPrefix + '%'}` : this.sql``}
     `;
 
-    console.log(`[ChunkStorage] getContentHashes: views=${sourceViewIds.length}, result=${rows.length}`);
+    console.error(`[ChunkStorage] getContentHashes: views=${sourceViewIds.length}, result=${rows.length}`);
 
     return rows.map((r) => r.chunk_content_hash);
   }
@@ -212,7 +212,7 @@ export class ChunkStorage {
       ORDER BY chunk_content_hash, path, ordinal
     `;
 
-    console.log(`[ChunkStorage] resolveOccurrences: input=${contentHashes.length}, result=${rows.length}`);
+    console.error(`[ChunkStorage] resolveOccurrences: input=${contentHashes.length}, result=${rows.length}`);
 
     return rows;
   }

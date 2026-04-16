@@ -94,7 +94,7 @@ async function loadFileContent(
   if (contentHash) {
     const blob = await fileBlobStorage.getByHash(contentHash);
     if (blob) {
-      console.log(`[read_source] blob-backed read: hash=${contentHash.slice(0, 12)}`);
+      console.error(`[read_source] blob-backed read: hash=${contentHash.slice(0, 12)}`);
       return blob.content;
     }
   }
@@ -103,7 +103,7 @@ async function loadFileContent(
   if (allowFsFallback && basePath) {
     try {
       const absolutePath = join(basePath, relativePath);
-      console.log(`[read_source] FS fallback: ${absolutePath}`);
+      console.error(`[read_source] FS fallback: ${absolutePath}`);
       return await readFile(absolutePath, 'utf-8');
     } catch {
       return null;
@@ -141,7 +141,7 @@ async function readByChunkId(
   indexedFileStorage: IndexedFileStorage,
   sourceViewStorage: SourceViewStorage,
 ): Promise<ToolResult> {
-  console.log(`[read_source] mode=chunkId, id=${chunkId}`);
+  console.error(`[read_source] mode=chunkId, id=${chunkId}`);
 
   const chunks = await chunkStorage.getByIds([chunkId]);
   if (chunks.length === 0) {
@@ -198,7 +198,7 @@ async function readByHeaderPath(
   indexedFileStorage: IndexedFileStorage,
   sourceViewStorage: SourceViewStorage,
 ): Promise<ToolResult> {
-  console.log(`[read_source] mode=headerPath, source=${sourceName}, path=${path}, header=${headerPath}`);
+  console.error(`[read_source] mode=headerPath, source=${sourceName}, path=${path}, header=${headerPath}`);
 
   const source = await sourceStorage.getByName(sourceName);
   if (!source) {
@@ -257,7 +257,7 @@ async function readByCoordinates(
   sourceViewStorage: SourceViewStorage,
   branch?: string,
 ): Promise<ToolResult> {
-  console.log(`[read_source] mode=coordinates, source=${sourceName}, path=${path}, branch=${branch ?? 'active'}`);
+  console.error(`[read_source] mode=coordinates, source=${sourceName}, path=${path}, branch=${branch ?? 'active'}`);
 
   const source = await sourceStorage.getByName(sourceName);
   if (!source) {
@@ -272,9 +272,9 @@ async function readByCoordinates(
     const branchView = await sourceViewStorage.getRefView(source.id, 'branch', branch);
     if (branchView) {
       viewId = branchView.id;
-      console.log(`[read_source] branch=${branch} — resolved viewId=${viewId}`);
+      console.error(`[read_source] branch=${branch} — resolved viewId=${viewId}`);
     } else {
-      console.log(`[read_source] branch=${branch} — view not found, falling back to active_view_id`);
+      console.error(`[read_source] branch=${branch} — view not found, falling back to active_view_id`);
     }
   }
 

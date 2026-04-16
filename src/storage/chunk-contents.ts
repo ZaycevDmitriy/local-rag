@@ -122,7 +122,7 @@ export class ChunkContentStorage {
 
     if (!tsQuery) return [];
 
-    console.log(`[ChunkContentStorage] searchBm25: query="${tsQuery}", limit=${limit}, prefilter=${contentHashes?.length ?? 'none'}`);
+    console.error(`[ChunkContentStorage] searchBm25: query="${tsQuery}", limit=${limit}, prefilter=${contentHashes?.length ?? 'none'}`);
 
     if (contentHashes && contentHashes.length > 0) {
       // Narrow mode: prefilter по content hashes.
@@ -159,7 +159,7 @@ export class ChunkContentStorage {
   ): Promise<Array<{ contentHash: string; score: number }>> {
     const vectorStr = pgvector.toSql(queryEmbedding) as string;
 
-    console.log(`[ChunkContentStorage] searchVector: limit=${limit}, prefilter=${contentHashes?.length ?? 'none'}`);
+    console.error(`[ChunkContentStorage] searchVector: limit=${limit}, prefilter=${contentHashes?.length ?? 'none'}`);
 
     if (contentHashes && contentHashes.length > 0) {
       // Narrow: exact search по prefiltered set.
