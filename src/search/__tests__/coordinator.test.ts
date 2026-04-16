@@ -2,7 +2,15 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { SearchCoordinator } from '../coordinator.js';
 import type { SearchConfig } from '../../config/index.js';
 import type { TextEmbedder } from '../../embeddings/index.js';
-import type { ChunkRow, ChunkStorage, SourceRow, SourceStorage } from '../../storage/index.js';
+import type {
+  ChunkRow,
+  ChunkStorage,
+  ChunkContentStorage,
+  SourceRow,
+  SourceStorage,
+  SourceViewRow,
+  SourceViewStorage,
+} from '../../storage/index.js';
 import type { Reranker } from '../reranker/types.js';
 
 // Фабрика мок-source.
@@ -233,5 +241,156 @@ describe('SearchCoordinator', () => {
       expect.any(Array),
       5,
     );
+  });
+});
+
+// --- Branch-aware: resolve sourceName -> sourceId. ---
+
+function makeView(overrides: Partial<SourceViewRow> = {}): SourceViewRow {
+  return {
+    id: 'view-1',
+    source_id: 'src-1',
+    view_kind: 'workspace',
+    ref_name: null,
+    head_commit_oid: null,
+    head_tree_oid: null,
+    subtree_oid: null,
+    dirty: false,
+    snapshot_fingerprint: 'fp',
+    file_count: 0,
+    chunk_count: 0,
+    last_seen_at: null,
+    last_indexed_at: null,
+    created_at: new Date(),
+    updated_at: new Date(),
+    ...overrides,
+  };
+}
+
+function createBranchAwareMocks() {
+  const chunkStorage = {
+    searchBm25: vi.fn().mockResolvedValue([]),
+    searchVector: vi.fn().mockResolvedValue([]),
+    getByIds: vi.fn().mockResolvedValue([]),
+    getContentHashes: vi.fn().mockResolvedValue([]),
+    resolveOccurrences: vi.fn().mockResolvedValue([]),
+  } as unknown as ChunkStorage;
+
+  const sourceStorage = {
+    getAll: vi.fn().mockResolvedValue([
+      makeSource({ id: 'src-karipos', name: 'karipos', active_view_id: 'view-karipos' }),
+      makeSource({ id: 'src-other', name: 'other', active_view_id: 'view-other' }),
+    ]),
+    getByName: vi.fn().mockImplementation(async (name: string) => {
+      if (name === 'karipos') {
+        return makeSource({ id: 'src-karipos', name: 'karipos', active_view_id: 'view-karipos' });
+      }
+      return null;
+    }),
+  } as unknown as SourceStorage;
+
+  const chunkContentStorage = {
+    searchBm25: vi.fn().mockResolvedValue([]),
+    searchVector: vi.fn().mockResolvedValue([]),
+  } as unknown as ChunkContentStorage;
+
+  const sourceViewStorage = {
+    getRefView: vi.fn().mockImplementation(async (sourceId: string, _kind: string, ref: string) => {
+      if (sourceId === 'src-karipos' && ref === 'main') {
+        return makeView({ id: 'view-karipos-main', source_id: 'src-karipos', view_kind: 'branch', ref_name: 'main' });
+      }
+      return null;
+    }),
+  } as unknown as SourceViewStorage;
+
+  const embedder = {
+    embedQuery: vi.fn().mockResolvedValue([0.1, 0.2, 0.3]),
+    dimensions: 3,
+  } as unknown as TextEmbedder;
+
+  const reranker = {
+    rerank: vi.fn().mockResolvedValue([]),
+  } as unknown as Reranker;
+
+  return {
+    chunkStorage,
+    sourceStorage,
+    chunkContentStorage,
+    sourceViewStorage,
+    embedder,
+    reranker,
+  };
+}
+
+function buildBranchAwareCoordinator(mocks: ReturnType<typeof createBranchAwareMocks>): SearchCoordinator {
+  return new SearchCoordinator(
+    mocks.chunkStorage,
+    mocks.sourceStorage,
+    mocks.embedder,
+    defaultConfig(),
+    mocks.reranker,
+    mocks.chunkContentStorage,
+    mocks.sourceViewStorage,
+  );
+}
+
+describe('SearchCoordinator — branch-aware sourceName filter', () => {
+  let mocks: ReturnType<typeof createBranchAwareMocks>;
+  let coordinator: SearchCoordinator;
+
+  beforeEach(() => {
+    mocks = createBranchAwareMocks();
+    coordinator = buildBranchAwareCoordinator(mocks);
+  });
+
+  it('резолвит sourceName → sourceId и ограничивает active views одним источником', async () => {
+    await coordinator.search({ query: 'test', sourceName: 'karipos' });
+
+    expect(mocks.sourceStorage.getByName).toHaveBeenCalledWith('karipos');
+    expect(mocks.chunkStorage.getContentHashes).toHaveBeenCalledWith({
+      sourceViewIds: ['view-karipos'],
+      sourceType: undefined,
+      pathPrefix: undefined,
+    });
+  });
+
+  it('работает с branch-параметром после резолва sourceName', async () => {
+    await coordinator.search({ query: 'test', sourceName: 'karipos', branch: 'main' });
+
+    expect(mocks.sourceViewStorage.getRefView).toHaveBeenCalledWith('src-karipos', 'branch', 'main');
+    expect(mocks.chunkStorage.getContentHashes).toHaveBeenCalledWith({
+      sourceViewIds: ['view-karipos-main'],
+      sourceType: undefined,
+      pathPrefix: undefined,
+    });
+  });
+
+  it('бросает Error при неизвестном sourceName', async () => {
+    await expect(
+      coordinator.search({ query: 'test', sourceName: 'no-such' }),
+    ).rejects.toThrow('Source "no-such" not found');
+    expect(mocks.chunkStorage.getContentHashes).not.toHaveBeenCalled();
+  });
+
+  it('бросает Error при одновременной передаче sourceId и sourceName', async () => {
+    await expect(
+      coordinator.search({
+        query: 'test',
+        sourceId: 'src-karipos',
+        sourceName: 'karipos',
+      }),
+    ).rejects.toThrow('Provide either sourceId or sourceName, not both');
+    expect(mocks.sourceStorage.getByName).not.toHaveBeenCalled();
+    expect(mocks.chunkStorage.getContentHashes).not.toHaveBeenCalled();
+  });
+
+  it('без sourceName/sourceId фильтрация идёт по всем active views', async () => {
+    await coordinator.search({ query: 'test' });
+
+    expect(mocks.chunkStorage.getContentHashes).toHaveBeenCalledWith({
+      sourceViewIds: ['view-karipos', 'view-other'],
+      sourceType: undefined,
+      pathPrefix: undefined,
+    });
   });
 });

@@ -202,42 +202,67 @@ export class SearchCoordinator {
 
   /**
    * Resolves search filters: source_view_ids from active views or specific branch.
+   * Резолвит sourceName → sourceId до остальной фильтрации; бросает ошибку
+   * при конфликте параметров или неизвестном имени источника.
    */
   private async resolveSearchFilters(query: SearchQuery): Promise<SearchFilters> {
+    const effectiveQuery = await this.resolveSourceNameFilter(query);
     const viewIds: string[] = [];
 
-    if (query.branch) {
+    if (effectiveQuery.branch) {
       // Ищем view по branch name.
       const sources = await this.sourceStorage.getAll();
       for (const source of sources) {
-        if (query.sourceId && source.id !== query.sourceId) continue;
+        if (effectiveQuery.sourceId && source.id !== effectiveQuery.sourceId) continue;
 
-        const view = await this.sourceViewStorage!.getRefView(source.id, 'branch', query.branch);
+        const view = await this.sourceViewStorage!.getRefView(source.id, 'branch', effectiveQuery.branch);
         if (view) {
           viewIds.push(view.id);
         }
       }
 
-      console.error(`[search] resolved branch="${query.branch}": ${viewIds.length} views`);
+      console.error(
+        `[search] resolved branch="${effectiveQuery.branch}" ` +
+        `sourceId=${effectiveQuery.sourceId ?? 'any'}: ${viewIds.length} views`,
+      );
     } else {
       // Default: active views.
       const sources = await this.sourceStorage.getAll();
       for (const source of sources) {
-        if (query.sourceId && source.id !== query.sourceId) continue;
+        if (effectiveQuery.sourceId && source.id !== effectiveQuery.sourceId) continue;
 
         if (source.active_view_id) {
           viewIds.push(source.active_view_id);
         }
       }
 
-      console.error(`[search] resolved active views: ${viewIds.length}`);
+      console.error(
+        `[search] resolved active views: ${viewIds.length} ` +
+        `(sourceId=${effectiveQuery.sourceId ?? 'any'})`,
+      );
     }
 
     return {
       sourceViewIds: viewIds,
-      sourceType: query.sourceType,
-      pathPrefix: query.pathPrefix,
+      sourceType: effectiveQuery.sourceType,
+      pathPrefix: effectiveQuery.pathPrefix,
     };
+  }
+
+  // Резолвит sourceName в sourceId. Проверяет конфликт sourceId+sourceName.
+  private async resolveSourceNameFilter(query: SearchQuery): Promise<SearchQuery> {
+    if (!query.sourceName) return query;
+
+    if (query.sourceId) {
+      throw new Error('Provide either sourceId or sourceName, not both');
+    }
+
+    const source = await this.sourceStorage.getByName(query.sourceName);
+    if (!source) {
+      throw new Error(`Source "${query.sourceName}" not found`);
+    }
+
+    return { ...query, sourceId: source.id };
   }
 
   // --- Legacy search (backward-compatible). ---
