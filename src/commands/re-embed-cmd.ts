@@ -4,8 +4,8 @@ import { loadConfig } from '../config/index.js';
 import { createDb, closeDb, SourceStorage, ChunkContentStorage } from '../storage/index.js';
 import { createTextEmbedder } from '../embeddings/index.js';
 
-// Размер батча для эмбеддингов (как в Indexer).
-const BATCH_SIZE = 64;
+// Размер батча для эмбеддингов (согласован с Indexer.EMBED_BATCH_SIZE).
+const BATCH_SIZE = 32;
 
 export const reEmbedCommand = new Command('re-embed')
   .description('Generate embeddings for chunks with missing vectors')

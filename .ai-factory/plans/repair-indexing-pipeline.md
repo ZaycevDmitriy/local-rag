@@ -112,7 +112,7 @@ Decisions:
 
 ### Phase 2: Resilient embeddings pipeline
 
-- [ ] Task 5: Per-batch try/catch в pMap callback
+- [x] Task 5: Per-batch try/catch в pMap callback
 
   **Deliverable:** Каждый batch в `pMap` обрабатывается независимо — один failed batch не обрушивает весь embedding phase.
 
@@ -133,7 +133,7 @@ Decisions:
   - INFO: `[Indexer.indexView] Embeddings: ${successCount}/${totalCount} succeeded, ${deferredCount} deferred`
   - DEBUG: `[Indexer.indexView] Batch ${i} completed: ${batch.length} embeddings in ${ms}ms`
 
-- [ ] Task 6: Обработка truncated JSON и структурная валидация в `OpenAITextEmbedder`
+- [x] Task 6: Обработка truncated JSON и структурная валидация в `OpenAITextEmbedder`
 
   **Deliverable:** `SyntaxError` от truncated JSON перехватывается с descriptive error, структура ответа валидируется перед использованием.
 
@@ -169,7 +169,7 @@ Decisions:
   - ERROR: `[OpenAITextEmbedder] Invalid response structure: ${description}. Body preview: ${preview}`
   - DEBUG: `[OpenAITextEmbedder] Response validated: ${data.length} embeddings`
 
-- [ ] Task 7: Уменьшить размер batch и согласовать batch sizes
+- [x] Task 7: Уменьшить размер batch и согласовать batch sizes
 
   **Deliverable:** Уменьшенный `EMBED_BATCH_SIZE` во всех точках входа.
 
