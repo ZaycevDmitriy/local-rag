@@ -107,8 +107,8 @@ export const exportCommand = new Command('export')
           compress: options.compress,
           outputPath,
           configPath,
-          onProgress: (name, current, total) => {
-            process.stdout.write(`\rЭкспорт ${name}... ${current}/${total} фрагментов`);
+          onProgress: (name, table, current, total) => {
+            process.stdout.write(`\rЭкспорт ${name}... ${table}: ${current}/${total}`);
           },
         });
 
