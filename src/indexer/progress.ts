@@ -16,6 +16,8 @@ export interface IndexResult {
   newChunkContentCount?: number;
   embeddingsDeferred?: number;
   strategy?: string;
+  // Число indexed_files, для которых repair-механизм восстановил chunks.
+  repairedFiles?: number;
 }
 
 // Интерфейс репортера прогресса.
@@ -74,6 +76,10 @@ export class ConsoleProgress implements ProgressReporter {
 
     if (result.embeddingsDeferred && result.embeddingsDeferred > 0) {
       console.log(`  Эмбеддинги отложены: ${result.embeddingsDeferred} (rag re-embed для восстановления)`);
+    }
+
+    if (result.repairedFiles && result.repairedFiles > 0) {
+      console.log(`  Восстановлено: ${result.repairedFiles} файлов`);
     }
   }
 

@@ -2,6 +2,7 @@
 import type { ChunkDispatcher, FileContent } from '../chunks/index.js';
 import type { TextEmbedder } from '../embeddings/index.js';
 import type {
+  ChunkContentInsert,
   ChunkStorage,
   ChunkContentStorage,
   ChunkOccurrenceInsert,
@@ -166,6 +167,97 @@ export class Indexer {
     }
     this.progress.onStoreComplete();
 
+    // 7.5 Repair: восстанавливаем chunks для indexed_files без ассоциированных chunks.
+    // Покрывает сценарий "broken baseline": diff-scan не пересоздаёт chunks для неизменённых файлов,
+    // если предыдущая индексация завершилась до chunk-фазы.
+    let repairedFiles = 0;
+    const chunklessFiles = await this.indexedFileStorage.getChunklessFiles(view.id);
+
+    if (chunklessFiles.length > 0) {
+      console.log(
+        `[Indexer.indexView] Repairing ${chunklessFiles.length} indexed files without chunks`,
+      );
+
+      const repairContentMap = new Map<string, string>();
+      const repairOccurrences: ChunkOccurrenceInsert[] = [];
+
+      for (const chunklessFile of chunklessFiles) {
+        try {
+          const blob = await this.fileBlobStorage.getByHash(chunklessFile.content_hash);
+
+          // Orphan indexed_file без blob — пропускаем, repair продолжается для остальных.
+          if (!blob) {
+            console.warn(
+              `[Indexer.indexView] Repair skipped ${chunklessFile.path}: ` +
+              `blob not found for content_hash=${chunklessFile.content_hash}`,
+            );
+            continue;
+          }
+
+          const fileContent: FileContent = {
+            path: chunklessFile.path,
+            content: blob.content,
+            sourceId: view.source_id,
+          };
+          const repairChunks = this.dispatcher.chunk(fileContent);
+
+          if (repairChunks.length === 0) {
+            // Файл отфильтрован chunker'ом (пустой, слишком короткий) — repair невозможен.
+            continue;
+          }
+
+          for (let ordinal = 0; ordinal < repairChunks.length; ordinal++) {
+            const chunk = repairChunks[ordinal]!;
+            if (!repairContentMap.has(chunk.contentHash)) {
+              repairContentMap.set(chunk.contentHash, chunk.content);
+            }
+            repairOccurrences.push({
+              sourceViewId: view.id,
+              indexedFileId: chunklessFile.id,
+              chunkContentHash: chunk.contentHash,
+              path: chunk.metadata.path,
+              sourceType: chunk.metadata.sourceType,
+              startLine: chunk.metadata.startLine,
+              endLine: chunk.metadata.endLine,
+              headerPath: chunk.metadata.headerPath,
+              language: chunk.metadata.language,
+              ordinal,
+              metadata: {},
+            });
+          }
+
+          repairedFiles++;
+          console.log(
+            `[Indexer.indexView] Repaired file: ${chunklessFile.path} -> ${repairChunks.length} chunks`,
+          );
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          console.warn(`[Indexer.indexView] Repair failed for ${chunklessFile.path}: ${msg}`);
+        }
+      }
+
+      const repairContentInserts: ChunkContentInsert[] = [...repairContentMap.entries()].map(
+        ([contentHash, content]) => ({ contentHash, content }),
+      );
+
+      // Порядок критичен: сначала chunk_contents (иначе getByHashes на шаге 8 не найдёт строк),
+      // затем chunk occurrences.
+      if (repairContentInserts.length > 0) {
+        await this.chunkContentStorage.insertBatch(repairContentInserts);
+      }
+      if (repairOccurrences.length > 0) {
+        await this.chunkStorage.insertBatch(repairOccurrences);
+      }
+
+      // Добавляем repair content hashes в contentInserts для единого embedding-прохода.
+      contentInserts.push(...repairContentInserts);
+
+      console.log(
+        `[Indexer.indexView] Repair summary: ${repairedFiles}/${chunklessFiles.length} files restored, ` +
+        `${repairOccurrences.length} chunk occurrences, ${repairContentInserts.length} new contents`,
+      );
+    }
+
     // 8. Генерируем embeddings для новых chunk_contents.
     let embeddingsDeferred = 0;
     if (contentInserts.length > 0) {
@@ -232,6 +324,7 @@ export class Indexer {
       reusedChunkContentCount: 0,
       embeddingsDeferred,
       strategy: context?.strategy ?? 'unknown',
+      repairedFiles,
     };
 
     this.progress.onComplete(result);

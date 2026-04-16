@@ -303,11 +303,13 @@ export async function indexSourceFromConfig(
   }
 
   // Шаг 11: Индексируем через branch-aware indexView.
-  await indexer.indexView(view, changeResult.changedFiles, changeResult.deletedPaths, {
+  const result = await indexer.indexView(view, changeResult.changedFiles, changeResult.deletedPaths, {
     totalFileCount: files.length,
     unchangedFileCount: files.length - changeResult.changedFiles.length,
     strategy: changeResult.strategy,
   });
+
+  console.log(`[runtime] indexView result: repaired=${result.repairedFiles ?? 0}`);
 
   // Шаг 12: Финализация — обновляем view stats и active_view_id.
   await finalizeView(view, files.length, source.id, chunkStorage, sourceViewStorage, sourceStorage, snapshotFingerprint, gitInfo);
