@@ -9,10 +9,10 @@
 ## Возможности
 
 - **Branch-aware индексация** — независимые снимки по git-веткам с дедупликацией контента и эмбеддингов
-- **Hybrid search** — BM25 + векторный поиск (narrow/broad modes) через RRF fusion + Jina Reranker
+- **Hybrid search** — BM25 + векторный поиск (narrow/broad modes) через RRF fusion + reranker
 - **AST-aware chunking** — tree-sitter разбивает код на семантические блоки (функции, классы, методы)
 - **MCP-сервер** — 4 инструмента для AI-агентов с поддержкой `branch` параметра для поиска по веткам
-- **Переключаемые провайдеры** — Jina, OpenAI, SiliconFlow для embeddings; Jina и SiliconFlow для rerank
+- **Переключаемые провайдеры** — Jina, OpenAI, SiliconFlow для embeddings; Jina, SiliconFlow и `none` для rerank
 - **Export / Import v2** — портативный backup в `.tar.gz` (6-table schema), re-embed при смене провайдера
 - **Garbage collection** — `rag gc` для очистки orphan blobs после удаления веток
 
@@ -31,7 +31,8 @@ docker compose up -d
 
 # Настройка.
 cp .env.example .env
-# Укажите JINA_API_KEY в .env
+# Укажите ключ выбранного провайдера в .env (JINA_API_KEY / OPENAI_API_KEY / SILICONFLOW_API_KEY)
+# и провайдера в rag.config.yaml (см. docs/configuration.md)
 
 # Инициализация БД.
 rag init

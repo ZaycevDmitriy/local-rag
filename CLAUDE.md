@@ -14,8 +14,8 @@ Local RAG — персональная система семантическог
 
 - **TypeScript (ESM)** — основной язык
 - **PostgreSQL (Docker)** — pgvector + tsvector + метаданные в одной БД
-- **Jina Embeddings v3** — эмбеддинги (1024d), абстракция `TextEmbedder` для смены провайдера
-- **Jina Reranker v2** — переранжирование результатов
+- **Embeddings** — провайдеры Jina v3 / OpenAI / SiliconFlow (Qwen3 и др.) через абстракцию `TextEmbedder`
+- **Reranker** — провайдеры Jina v2 / SiliconFlow / `none` через абстракцию `Reranker`
 - **tree-sitter** — AST-парсинг кода (полноценные queries для TS/JS, fallback для остальных)
 - **@modelcontextprotocol/sdk** — MCP stdio сервер
 - **YAML (rag.config.yaml)** — конфигурация с Zod-валидацией
@@ -47,7 +47,7 @@ Local RAG — персональная система семантическог
 Query -> resolve active_view_id (per source) -> embed query
   -> parallel [BM25 (tsvector, top 50) + Vector (narrow/broad, top 50)]
   -> content-level dedup (per chunk_content_hash) -> RRF Fusion (k=60)
-  -> Jina Rerank (top 50 -> top 10) -> Response
+  -> Rerank (top 50 -> top 10) -> Response
 ```
 
 Branch-aware: optional `branch` parameter в MCP `search` tool выбирает конкретный `source_view` вместо `active_view_id`. Vector search использует narrow mode (exact по prefiltered set) если кандидатов < 10K, иначе broad mode (ANN + escalation + fallback).
@@ -91,22 +91,22 @@ PostgreSQL с расширением pgvector. Шесть таблиц (мигр
 - `chunk_contents` — дедуплицированные тела чанков с `embedding vector(N)` и `search_vector tsvector` (generated)
 - `chunks` — occurrence-level строки (source_view_id, indexed_file_id, chunk_content_hash, path, ordinal, координаты)
 
-HNSW-индекс на `chunk_contents.embedding`, GIN-индекс на `chunk_contents.search_vector`. Размерность вектора зависит от провайдера (Jina: 1024, OpenAI: 1536). После destructive migration 005 требуется полная переиндексация (`rag index --all`).
+HNSW-индекс на `chunk_contents.embedding`, GIN-индекс на `chunk_contents.search_vector`. Размерность вектора зависит от провайдера (Jina v3: 1024, OpenAI text-embedding-3-small: 1536, SiliconFlow Qwen3-Embedding-0.6B: 1024). После destructive migration 005 требуется полная переиндексация (`rag index --all`).
 
 ## Configuration
 
 Файл `rag.config.yaml` (или `~/.config/rag/config.yaml`):
 - `database` — подключение к PostgreSQL
-- `embeddings` — провайдер (jina/openai/self-hosted), API ключи через `${ENV_VAR}`
-- `reranker` — провайдер (jina/none)
+- `embeddings` — провайдер (`jina` / `openai` / `siliconflow`), API ключи через `${ENV_VAR}`
+- `reranker` — провайдер (`jina` / `siliconflow` / `none`)
 - `search` — веса BM25/vector, RRF k, topK параметры
 - `sources` — список источников с include/exclude паттернами
 - `indexing` — размер чанков, overlap, директория для git-клонов
 
 ## Implementation Phases
 
-1. **Ядро** — конфиг, PostgreSQL, markdown/fixed chunking, Jina embeddings, hybrid search, CLI (init, index)
-2. **MCP + rerank** — Jina reranker, MCP stdio сервер с 4 инструментами, инкрементальная индексация
+1. **Ядро** — конфиг, PostgreSQL, markdown/fixed chunking, embeddings (Jina), hybrid search, CLI (init, index)
+2. **MCP + rerank** — reranker (Jina), MCP stdio сервер с 4 инструментами, инкрементальная индексация
 3. **Код** — tree-sitter chunker (TS/JS), fallback chunker, Git-источники
 4. **Полировка** — .gitignore/.ragignore фильтрация, CLI (list, remove, прогресс), OpenAI embedder
 5. **Рефакторинг экстракторов** — ts-extractor, extractor-types, languages с graceful degradation

@@ -50,7 +50,7 @@ Branch-aware модель с дедупликацией:
 Query -> resolve active_view_id (per source) -> embed query
   -> parallel [BM25 (tsvector, top 50), Vector (narrow/broad, top 50)]
   -> content-level dedup (per chunk_content_hash)
-  -> RRF Fusion (k=60) -> Jina Rerank (top 50 -> top 10) -> Response
+  -> RRF Fusion (k=60) -> Rerank (top 50 -> top 10) -> Response
 ```
 
 Branch-aware поиск: optional `branch` параметр выбирает конкретный `source_view` вместо `active_view_id`.
@@ -77,13 +77,13 @@ Branch-aware поиск: optional `branch` параметр выбирает к�
 |-----------|-----------|
 | Язык | TypeScript (ESM, strict) |
 | БД | PostgreSQL 16 + pgvector + tsvector |
-| Эмбеддинги | Jina Embeddings v3 / OpenAI / SiliconFlow |
-| Реранкинг | Jina Reranker v2 / SiliconFlow |
+| Эмбеддинги | Jina Embeddings v3 / OpenAI / SiliconFlow (Qwen3) |
+| Реранкинг | Jina Reranker v2 / SiliconFlow (Qwen3) / `none` |
 | AST-парсинг | tree-sitter |
 | MCP | @modelcontextprotocol/sdk (stdio) |
 | CLI | Commander |
 | Конфиг | YAML + Zod-валидация |
-| Тесты | Vitest (471+ тестов) |
+| Тесты | Vitest (511+ тестов) |
 
 ## See Also
 
