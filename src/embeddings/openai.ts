@@ -16,7 +16,9 @@ interface OpenAIEmbeddingResponse {
 }
 
 // Максимальное количество элементов в одном батче.
-const BATCH_SIZE = 100;
+// Снижен с 100 до 64 для согласованности с indexer (32) и снижения объёма
+// потери при truncated JSON от провайдера.
+const BATCH_SIZE = 64;
 
 // URL OpenAI Embeddings API по умолчанию.
 const DEFAULT_BASE_URL = 'https://api.openai.com/v1/embeddings';
@@ -103,7 +105,53 @@ export class OpenAITextEmbedder implements TextEmbedder {
       );
     }
 
-    const json = (await response.json()) as OpenAIEmbeddingResponse;
+    // Читаем body как текст, затем парсим вручную: это позволяет включить
+    // фрагмент ответа в сообщение об ошибке при truncated JSON от провайдера
+    // (SiliconFlow замечен в возврате оборванных ответов при высоких нагрузках).
+    // response.json() потребляет stream безвозвратно — через text() получаем raw
+    // для диагностики без потери данных.
+    const text = await response.text();
+    let json: OpenAIEmbeddingResponse;
+    try {
+      json = JSON.parse(text) as OpenAIEmbeddingResponse;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      const preview = text.slice(0, 200);
+      console.error(
+        `[OpenAITextEmbedder] Malformed JSON response: ${msg}. Body preview: ${preview}`,
+      );
+      throw new Error(
+        `${this.providerName}: malformed JSON response (${msg}). Body[0..200]: ${preview}`,
+      );
+    }
+
+    // Структурная валидация: без Zod, достаточно быстрой проверки формы.
+    if (!json || !Array.isArray(json.data)) {
+      const preview = text.slice(0, 200);
+      console.error(
+        `[OpenAITextEmbedder] Invalid response structure: missing data array. Body preview: ${preview}`,
+      );
+      throw new Error(
+        `${this.providerName}: invalid response structure (missing data array). Body[0..200]: ${preview}`,
+      );
+    }
+
+    for (let i = 0; i < json.data.length; i++) {
+      const item = json.data[i]!;
+      if (typeof item.index !== 'number' || !Array.isArray(item.embedding)) {
+        const preview = text.slice(0, 200);
+        console.error(
+          `[OpenAITextEmbedder] Invalid response structure: data[${i}] has wrong shape. ` +
+          `Body preview: ${preview}`,
+        );
+        throw new Error(
+          `${this.providerName}: invalid response structure (data[${i}] wrong shape). ` +
+          `Body[0..200]: ${preview}`,
+        );
+      }
+    }
+
+    console.error(`[OpenAITextEmbedder] Response validated: ${json.data.length} embeddings`);
 
     // Сортируем по index для гарантии порядка.
     const sorted = [...json.data].sort((a, b) => a.index - b.index);

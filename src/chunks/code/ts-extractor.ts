@@ -47,7 +47,13 @@ function visitNode(node: SyntaxNode, result: ExtractedNode[], currentClassName: 
     return;
   }
 
-  case 'function_declaration': {
+  case 'function_declaration':
+  // generator_function_declaration: function* name() {} — tree-sitter выделяет
+  // их в отдельный тип узла. Логика идентична обычной функции.
+  case 'generator_function_declaration':
+  // Некоторые версии tree-sitter-typescript отдают generator без суффикса
+  // _declaration, когда он встречается как expression-like statement.
+  case 'generator_function': {
     const name = extractName(node);
     if (name) {
       result.push({
@@ -57,6 +63,11 @@ function visitNode(node: SyntaxNode, result: ExtractedNode[], currentClassName: 
         endLine: toLine(node.endPosition.row),
         text: node.text,
       });
+      if (node.type !== 'function_declaration') {
+        console.log(
+          `[TsExtractor] Extracted generator function: ${currentClassName ? `${currentClassName}.${name}` : name}`,
+        );
+      }
     }
     return;
   }
@@ -126,8 +137,21 @@ function visitNode(node: SyntaxNode, result: ExtractedNode[], currentClassName: 
   }
 
   default: {
-    // Продолжаем обход для верхнего уровня (program / module).
-    if (node.type === 'program' || node.type === 'module' || node.type === 'statement_block') {
+    // Продолжаем обход для верхнего уровня (program / module) и container-узлов,
+    // внутри которых могут жить объявления. Tree-sitter-typescript оборачивает
+    // namespace в expression_statement → internal_module → statement_block,
+    // поэтому в список включаем всё, что встречается по пути до объявлений.
+    if (
+      node.type === 'program'
+      || node.type === 'module'
+      || node.type === 'statement_block'
+      || node.type === 'internal_module'
+      || node.type === 'ambient_declaration'
+      || node.type === 'expression_statement'
+    ) {
+      if (node.type === 'internal_module' || node.type === 'ambient_declaration') {
+        console.log(`[TsExtractor] Recursing into unknown container: ${node.type}`);
+      }
       for (const child of node.children) {
         visitNode(child, result, currentClassName);
       }
@@ -146,20 +170,34 @@ function checkExportConstArrow(exportNode: SyntaxNode, result: ExtractedNode[], 
   }
 }
 
-// Проверяет const name = () => {} в lexical_declaration.
+// Проверяет const name = () => {} / const name = function*() {} в lexical_declaration.
+// Покрывает частый паттерн Redux Saga: export const mySaga = function*() { ... }.
 function checkLexicalDeclarationForArrow(node: SyntaxNode, result: ExtractedNode[], currentClassName: string | null): void {
   for (const child of node.children) {
     if (child.type === 'variable_declarator') {
       const nameNode = child.childForFieldName('name');
       const valueNode = child.childForFieldName('value');
-      if (nameNode && valueNode && (valueNode.type === 'arrow_function' || valueNode.type === 'function')) {
+      if (
+        nameNode
+        && valueNode
+        && (
+          valueNode.type === 'arrow_function'
+          || valueNode.type === 'function'
+          || valueNode.type === 'function_expression'
+          || valueNode.type === 'generator_function'
+        )
+      ) {
+        const fqn = currentClassName ? `${currentClassName}.${nameNode.text}` : nameNode.text;
         result.push({
           fragmentType: 'FUNCTION',
-          fqn: currentClassName ? `${currentClassName}.${nameNode.text}` : nameNode.text,
+          fqn,
           startLine: toLine(node.startPosition.row),
           endLine: toLine(node.endPosition.row),
           text: node.text,
         });
+        if (valueNode.type === 'generator_function') {
+          console.log(`[TsExtractor] Extracted generator expression via const: ${fqn}`);
+        }
       }
     }
   }

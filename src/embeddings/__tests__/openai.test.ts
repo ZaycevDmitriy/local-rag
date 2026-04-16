@@ -50,7 +50,7 @@ describe('OpenAITextEmbedder', () => {
     fetchMock.mockResolvedValueOnce({
       ok: true,
       status: 200,
-      json: async () => makeOpenAIResponse([vector]),
+      text: async () => JSON.stringify(makeOpenAIResponse([vector])),
     });
 
     const embedder = new OpenAITextEmbedder(DEFAULT_CONFIG);
@@ -65,7 +65,7 @@ describe('OpenAITextEmbedder', () => {
     fetchMock.mockResolvedValueOnce({
       ok: true,
       status: 200,
-      json: async () => makeOpenAIResponse([vector]),
+      text: async () => JSON.stringify(makeOpenAIResponse([vector])),
     });
 
     const embedder = new OpenAITextEmbedder(DEFAULT_CONFIG);
@@ -89,9 +89,9 @@ describe('OpenAITextEmbedder', () => {
     expect(body.task).toBeUndefined();
   });
 
-  it('embedBatch() разбивает входные данные на батчи по 100', async () => {
-    // Создаём 250 элементов — должно быть 3 батча: 100, 100, 50.
-    const inputs = Array.from({ length: 250 }, (_, i) => `text ${i}`);
+  it('embedBatch() разбивает входные данные на батчи по 64', async () => {
+    // Создаём 200 элементов — должно быть 4 батча: 64, 64, 64, 8.
+    const inputs = Array.from({ length: 200 }, (_, i) => `text ${i}`);
     const dimensions = 128;
     const config = { ...DEFAULT_CONFIG, dimensions };
 
@@ -101,15 +101,15 @@ describe('OpenAITextEmbedder', () => {
       return {
         ok: true,
         status: 200,
-        json: async () => makeOpenAIResponse(vectors),
+        text: async () => JSON.stringify(makeOpenAIResponse(vectors)),
       };
     });
 
     const embedder = new OpenAITextEmbedder(config);
     const results = await embedder.embedBatch(inputs);
 
-    // Должно быть 3 вызова API.
-    expect(fetchMock).toHaveBeenCalledTimes(3);
+    // Должно быть 4 вызова API.
+    expect(fetchMock).toHaveBeenCalledTimes(4);
 
     // Проверяем размеры батчей.
     const batchSizes = fetchMock.mock.calls.map((call: unknown[]) => {
@@ -117,10 +117,10 @@ describe('OpenAITextEmbedder', () => {
       const body = JSON.parse(options.body as string) as OpenAIRequestBody;
       return body.input.length;
     });
-    expect(batchSizes).toEqual([100, 100, 50]);
+    expect(batchSizes).toEqual([64, 64, 64, 8]);
 
     // Общее количество результатов.
-    expect(results).toHaveLength(250);
+    expect(results).toHaveLength(200);
   });
 
   it('embedBatch() возвращает пустой массив для пустого входа', async () => {
@@ -136,7 +136,7 @@ describe('OpenAITextEmbedder', () => {
     fetchMock.mockResolvedValueOnce({
       ok: true,
       status: 200,
-      json: async () => makeOpenAIResponse([vector]),
+      text: async () => JSON.stringify(makeOpenAIResponse([vector])),
     });
 
     const embedder = new OpenAITextEmbedder(DEFAULT_CONFIG);
@@ -164,6 +164,103 @@ describe('OpenAITextEmbedder', () => {
     );
   });
 
+  describe('валидация JSON и структуры ответа', () => {
+    it('truncated JSON → descriptive error с body preview', async () => {
+      // Truncated JSON: открывающая скобка без закрывающей.
+      const truncated = '{"data":[{"index":0,"embedding":[0.1,0.2';
+      fetchMock.mockResolvedValue({
+        ok: true,
+        status: 200,
+        text: async () => truncated,
+      });
+
+      const embedder = new OpenAITextEmbedder(DEFAULT_CONFIG);
+
+      await expect(embedder.embed('test')).rejects.toThrow(/malformed JSON response/);
+      await expect(embedder.embed('test')).rejects.toThrow(/Body\[0\.\.200\]/);
+    });
+
+    it('пустой body → malformed JSON error', async () => {
+      fetchMock.mockResolvedValue({
+        ok: true,
+        status: 200,
+        text: async () => '',
+      });
+
+      const embedder = new OpenAITextEmbedder(DEFAULT_CONFIG);
+
+      await expect(embedder.embed('test')).rejects.toThrow(/malformed JSON/);
+    });
+
+    it('валидный JSON без data-поля → structure error', async () => {
+      fetchMock.mockResolvedValue({
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify({ error: 'unexpected' }),
+      });
+
+      const embedder = new OpenAITextEmbedder(DEFAULT_CONFIG);
+
+      await expect(embedder.embed('test')).rejects.toThrow(/invalid response structure/);
+      await expect(embedder.embed('test')).rejects.toThrow(/missing data array/);
+    });
+
+    it('data не массив → structure error', async () => {
+      fetchMock.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify({ data: 'not an array' }),
+      });
+
+      const embedder = new OpenAITextEmbedder(DEFAULT_CONFIG);
+
+      await expect(embedder.embed('test')).rejects.toThrow(/missing data array/);
+    });
+
+    it('элемент data без index → structure error', async () => {
+      fetchMock.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify({ data: [{ embedding: [0.1, 0.2] }] }),
+      });
+
+      const embedder = new OpenAITextEmbedder(DEFAULT_CONFIG);
+
+      await expect(embedder.embed('test')).rejects.toThrow(/wrong shape/);
+    });
+
+    it('элемент data без embedding → structure error', async () => {
+      fetchMock.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify({ data: [{ index: 0 }] }),
+      });
+
+      const embedder = new OpenAITextEmbedder(DEFAULT_CONFIG);
+
+      await expect(embedder.embed('test')).rejects.toThrow(/wrong shape/);
+    });
+
+    it('валидный response с несколькими эмбеддингами сортируется по index', async () => {
+      fetchMock.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify({
+          data: [
+            { index: 1, embedding: [0.9, 0.9] },
+            { index: 0, embedding: [0.1, 0.1] },
+          ],
+        }),
+      });
+
+      const embedder = new OpenAITextEmbedder({ ...DEFAULT_CONFIG, dimensions: 2 });
+      const results = await embedder.embedBatch(['first', 'second']);
+
+      expect(results[0]).toEqual([0.1, 0.1]);
+      expect(results[1]).toEqual([0.9, 0.9]);
+    });
+  });
+
   describe('retry логика', () => {
     beforeEach(() => {
       vi.useFakeTimers();
@@ -185,7 +282,7 @@ describe('OpenAITextEmbedder', () => {
         .mockResolvedValueOnce({
           ok: true,
           status: 200,
-          json: async () => makeOpenAIResponse([vector]),
+          text: async () => JSON.stringify(makeOpenAIResponse([vector])),
         });
 
       const embedder = new OpenAITextEmbedder(DEFAULT_CONFIG);
@@ -212,7 +309,7 @@ describe('OpenAITextEmbedder', () => {
         .mockResolvedValueOnce({
           ok: true,
           status: 200,
-          json: async () => makeOpenAIResponse([vector]),
+          text: async () => JSON.stringify(makeOpenAIResponse([vector])),
         });
 
       const embedder = new OpenAITextEmbedder(DEFAULT_CONFIG);
@@ -283,7 +380,7 @@ describe('OpenAITextEmbedder (baseUrl + providerName)', () => {
     fetchMock.mockResolvedValueOnce({
       ok: true,
       status: 200,
-      json: async () => makeOpenAIResponse([vector]),
+      text: async () => JSON.stringify(makeOpenAIResponse([vector])),
     });
 
     const embedder = new OpenAITextEmbedder({
@@ -304,7 +401,7 @@ describe('OpenAITextEmbedder (baseUrl + providerName)', () => {
     fetchMock.mockResolvedValueOnce({
       ok: true,
       status: 200,
-      json: async () => makeOpenAIResponse([vector]),
+      text: async () => JSON.stringify(makeOpenAIResponse([vector])),
     });
 
     const embedder = new OpenAITextEmbedder(DEFAULT_CONFIG);

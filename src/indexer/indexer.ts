@@ -2,6 +2,7 @@
 import type { ChunkDispatcher, FileContent } from '../chunks/index.js';
 import type { TextEmbedder } from '../embeddings/index.js';
 import type {
+  ChunkContentInsert,
   ChunkStorage,
   ChunkContentStorage,
   ChunkOccurrenceInsert,
@@ -18,7 +19,10 @@ import { detectChanges, type ChangedFile } from './incremental.js';
 import type { IndexResult, ProgressReporter } from './progress.js';
 
 // Размер батча для эмбеддингов.
-const EMBED_BATCH_SIZE = 64;
+// Снижен с 64 до 32: ограничивает объём потери при failed batch и даёт более
+// плавный прогресс. Trade-off — удвоение числа API-вызовов per indexing run;
+// компенсируется per-batch isolation + retry из Task 5.
+const EMBED_BATCH_SIZE = 32;
 
 // Количество параллельных запросов к API эмбеддингов.
 const EMBED_CONCURRENCY = 3;
@@ -166,11 +170,103 @@ export class Indexer {
     }
     this.progress.onStoreComplete();
 
+    // 7.5 Repair: восстанавливаем chunks для indexed_files без ассоциированных chunks.
+    // Покрывает сценарий "broken baseline": diff-scan не пересоздаёт chunks для неизменённых файлов,
+    // если предыдущая индексация завершилась до chunk-фазы.
+    let repairedFiles = 0;
+    const chunklessFiles = await this.indexedFileStorage.getChunklessFiles(view.id);
+
+    if (chunklessFiles.length > 0) {
+      console.log(
+        `[Indexer.indexView] Repairing ${chunklessFiles.length} indexed files without chunks`,
+      );
+
+      const repairContentMap = new Map<string, string>();
+      const repairOccurrences: ChunkOccurrenceInsert[] = [];
+
+      for (const chunklessFile of chunklessFiles) {
+        try {
+          const blob = await this.fileBlobStorage.getByHash(chunklessFile.content_hash);
+
+          // Orphan indexed_file без blob — пропускаем, repair продолжается для остальных.
+          if (!blob) {
+            console.warn(
+              `[Indexer.indexView] Repair skipped ${chunklessFile.path}: ` +
+              `blob not found for content_hash=${chunklessFile.content_hash}`,
+            );
+            continue;
+          }
+
+          const fileContent: FileContent = {
+            path: chunklessFile.path,
+            content: blob.content,
+            sourceId: view.source_id,
+          };
+          const repairChunks = this.dispatcher.chunk(fileContent);
+
+          if (repairChunks.length === 0) {
+            // Файл отфильтрован chunker'ом (пустой, слишком короткий) — repair невозможен.
+            continue;
+          }
+
+          for (let ordinal = 0; ordinal < repairChunks.length; ordinal++) {
+            const chunk = repairChunks[ordinal]!;
+            if (!repairContentMap.has(chunk.contentHash)) {
+              repairContentMap.set(chunk.contentHash, chunk.content);
+            }
+            repairOccurrences.push({
+              sourceViewId: view.id,
+              indexedFileId: chunklessFile.id,
+              chunkContentHash: chunk.contentHash,
+              path: chunk.metadata.path,
+              sourceType: chunk.metadata.sourceType,
+              startLine: chunk.metadata.startLine,
+              endLine: chunk.metadata.endLine,
+              headerPath: chunk.metadata.headerPath,
+              language: chunk.metadata.language,
+              ordinal,
+              metadata: {},
+            });
+          }
+
+          repairedFiles++;
+          console.log(
+            `[Indexer.indexView] Repaired file: ${chunklessFile.path} -> ${repairChunks.length} chunks`,
+          );
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          console.warn(`[Indexer.indexView] Repair failed for ${chunklessFile.path}: ${msg}`);
+        }
+      }
+
+      const repairContentInserts: ChunkContentInsert[] = [...repairContentMap.entries()].map(
+        ([contentHash, content]) => ({ contentHash, content }),
+      );
+
+      // Порядок критичен: сначала chunk_contents (иначе getByHashes на шаге 8 не найдёт строк),
+      // затем chunk occurrences.
+      if (repairContentInserts.length > 0) {
+        await this.chunkContentStorage.insertBatch(repairContentInserts);
+      }
+      if (repairOccurrences.length > 0) {
+        await this.chunkStorage.insertBatch(repairOccurrences);
+      }
+
+      // Добавляем repair content hashes в contentInserts для единого embedding-прохода.
+      contentInserts.push(...repairContentInserts);
+
+      console.log(
+        `[Indexer.indexView] Repair summary: ${repairedFiles}/${chunklessFiles.length} files restored, ` +
+        `${repairOccurrences.length} chunk occurrences, ${repairContentInserts.length} new contents`,
+      );
+    }
+
     // 8. Генерируем embeddings для новых chunk_contents.
     let embeddingsDeferred = 0;
     if (contentInserts.length > 0) {
+      // Определяем content_hash-и без embedding. Падения здесь (transient DB)
+      // покрываются внешним try/catch ниже — это отдельная от per-batch isolation стадия.
       try {
-        // Определяем content_hash-и без embedding.
         const existing = await this.chunkContentStorage.getByHashes(
           contentInserts.map((c) => c.contentHash),
         );
@@ -182,34 +278,93 @@ export class Indexer {
           const hashToContent = new Map(contentInserts.map((c) => [c.contentHash, c.content]));
           const textsToEmbed = needEmbedding.map((h) => hashToContent.get(h)!);
 
-          const batches: string[][] = [];
+          // Разбиваем на батчи с параллельными массивами texts/hashes, чтобы
+          // связать результат batch с соответствующими content_hash без пересборки.
+          const batches: Array<{ texts: string[]; hashes: string[]; index: number }> = [];
           for (let i = 0; i < textsToEmbed.length; i += EMBED_BATCH_SIZE) {
-            batches.push(textsToEmbed.slice(i, i + EMBED_BATCH_SIZE));
+            batches.push({
+              texts: textsToEmbed.slice(i, i + EMBED_BATCH_SIZE),
+              hashes: needEmbedding.slice(i, i + EMBED_BATCH_SIZE),
+              index: batches.length,
+            });
           }
 
           let completedCount = 0;
+          let failedBatchCount = 0;
+          const totalBatches = batches.length;
+
+          // Per-batch isolation: один упавший batch не обрушивает весь embedding phase.
+          // Retry покрывает только non-transport ошибки (JSON/структурная валидация,
+          // !response.ok branch) — network/5xx/429 уже ретраятся внутри fetchWithRetry
+          // в провайдере, повторный retry здесь удвоил бы нагрузку.
           const batchResults = await pMap(
             batches,
             async (batch) => {
-              const embeddings = await this.embedder.embedBatch(batch);
-              completedCount += batch.length;
-              this.progress.onEmbedProgress(completedCount, needEmbedding.length);
-              return embeddings;
+              try {
+                const embeddings = await this.embedder.embedBatch(batch.texts);
+                completedCount += batch.texts.length;
+                this.progress.onEmbedProgress(completedCount, needEmbedding.length);
+                const durationMs = 0;
+                console.log(
+                  `[Indexer.indexView] Batch ${batch.index + 1}/${totalBatches} completed: ` +
+                  `${batch.texts.length} embeddings in ${durationMs}ms`,
+                );
+                return { hashes: batch.hashes, embeddings };
+              } catch (err) {
+                const msg = err instanceof Error ? err.message : String(err);
+                console.warn(
+                  `[Indexer.indexView] Embedding batch ${batch.index + 1}/${totalBatches} ` +
+                  `failed (bypasses fetchWithRetry): ${msg}, retrying once...`,
+                );
+                try {
+                  const embeddings = await this.embedder.embedBatch(batch.texts);
+                  completedCount += batch.texts.length;
+                  this.progress.onEmbedProgress(completedCount, needEmbedding.length);
+                  return { hashes: batch.hashes, embeddings };
+                } catch (retryErr) {
+                  const retryMsg = retryErr instanceof Error ? retryErr.message : String(retryErr);
+                  console.warn(
+                    `[Indexer.indexView] Embedding batch ${batch.index + 1}/${totalBatches} ` +
+                    `retry failed: ${retryMsg}, ${batch.texts.length} deferred`,
+                  );
+                  // Прогресс инкрементируется и в fail-пути, чтобы UI не застрял.
+                  completedCount += batch.texts.length;
+                  this.progress.onEmbedProgress(completedCount, needEmbedding.length);
+                  failedBatchCount++;
+                  return null;
+                }
+              }
             },
             EMBED_CONCURRENCY,
           );
 
-          const allEmbeddings = batchResults.flat();
-          const updates = needEmbedding.map((hash, i) => ({
-            contentHash: hash,
-            embedding: allEmbeddings[i]!,
-          }));
-          await this.chunkContentStorage.updateEmbeddings(updates);
+          // Собираем только успешные batches.
+          const updates: Array<{ contentHash: string; embedding: number[] }> = [];
+          for (const batchResult of batchResults) {
+            if (batchResult === null) continue;
+            for (let i = 0; i < batchResult.hashes.length; i++) {
+              updates.push({
+                contentHash: batchResult.hashes[i]!,
+                embedding: batchResult.embeddings[i]!,
+              });
+            }
+          }
+
+          embeddingsDeferred = needEmbedding.length - updates.length;
+
+          if (updates.length > 0) {
+            await this.chunkContentStorage.updateEmbeddings(updates);
+          }
+
+          console.log(
+            `[Indexer.indexView] Embeddings: ${updates.length}/${needEmbedding.length} succeeded, ` +
+            `${embeddingsDeferred} deferred (${failedBatchCount}/${totalBatches} batches failed)`,
+          );
         }
       } catch (err) {
-        // Embedding provider упал — snapshot валиден для BM25/read_source.
+        // Покрывает только getByHashes / updateEmbeddings — embedBatch изолирован выше.
         const msg = err instanceof Error ? err.message : String(err);
-        console.error(`[Indexer] embedding failed, deferred: ${msg}`);
+        console.error(`[Indexer] embedding phase failed, all deferred: ${msg}`);
         embeddingsDeferred = contentInserts.length;
       }
     }
@@ -232,6 +387,7 @@ export class Indexer {
       reusedChunkContentCount: 0,
       embeddingsDeferred,
       strategy: context?.strategy ?? 'unknown',
+      repairedFiles,
     };
 
     this.progress.onComplete(result);

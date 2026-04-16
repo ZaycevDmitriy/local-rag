@@ -29,6 +29,23 @@ export class IndexedFileStorage {
     return rows[0] ?? null;
   }
 
+  // Возвращает indexed_files, не имеющие ни одной записи в chunks для данного view.
+  // Используется repair-механизмом при восстановлении chunkless файлов.
+  async getChunklessFiles(viewId: string): Promise<IndexedFileRow[]> {
+    const rows = await this.sql<IndexedFileRow[]>`
+      SELECT inf.*
+      FROM indexed_files inf
+      LEFT JOIN chunks c ON c.indexed_file_id = inf.id
+      WHERE inf.source_view_id = ${viewId} AND c.id IS NULL
+    `;
+
+    console.log(
+      `[IndexedFileStorage.getChunklessFiles] source_view_id=${viewId}, found=${rows.length}`,
+    );
+
+    return rows;
+  }
+
   // Вставляет или обновляет файлы пачкой. Возвращает все upserted rows.
   async upsertMany(
     viewId: string,

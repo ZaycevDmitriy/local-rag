@@ -67,7 +67,7 @@ export class SearchCoordinator {
   private async searchBranchAware(query: SearchQuery): Promise<SearchResponse> {
     // 1. Resolve view filters.
     const filters = await this.resolveSearchFilters(query);
-    console.log(
+    console.error(
       `[search] branch-aware: views=${filters.sourceViewIds.length}, ` +
       `sourceType=${filters.sourceType ?? 'all'}, pathPrefix=${filters.pathPrefix ?? 'none'}`,
     );
@@ -81,7 +81,7 @@ export class SearchCoordinator {
     const isNarrow = contentHashes.length < NARROW_THRESHOLD;
     const mode = isNarrow ? 'narrow' : 'broad';
 
-    console.log(`[search] mode=${mode}, contentHashes=${contentHashes.length}`);
+    console.error(`[search] mode=${mode}, contentHashes=${contentHashes.length}`);
 
     // 3. Embed query.
     const queryEmbedding = await this.embedder.embedQuery(query.query);
@@ -218,7 +218,7 @@ export class SearchCoordinator {
         }
       }
 
-      console.log(`[search] resolved branch="${query.branch}": ${viewIds.length} views`);
+      console.error(`[search] resolved branch="${query.branch}": ${viewIds.length} views`);
     } else {
       // Default: active views.
       const sources = await this.sourceStorage.getAll();
@@ -230,7 +230,7 @@ export class SearchCoordinator {
         }
       }
 
-      console.log(`[search] resolved active views: ${viewIds.length}`);
+      console.error(`[search] resolved active views: ${viewIds.length}`);
     }
 
     return {
