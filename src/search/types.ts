@@ -5,6 +5,9 @@ export interface SearchQuery {
   query: string;
   topK?: number;
   sourceId?: string;
+  // Альтернатива sourceId: фильтр по имени источника (симметрично read_source).
+  // Передача sourceId и sourceName одновременно вызывает ошибку.
+  sourceName?: string;
   sourceType?: string;
   pathPrefix?: string;
   // Branch-aware (Task 7).
