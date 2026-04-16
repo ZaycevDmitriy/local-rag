@@ -223,7 +223,7 @@ Decisions:
 
 ### Phase 4: Тесты
 
-- [ ] Task 10: Тесты для repair mechanism (depends on 1, 2, 3, 4)
+- [x] Task 10: Тесты для repair mechanism (depends on 1, 2, 3, 4)
 
   **Deliverable:** Unit-тесты для `getChunklessFiles` и repair-логики в indexer.
 
@@ -236,7 +236,7 @@ Decisions:
   - Тест: если blob отсутствует для content_hash — файл пропускается, repair продолжается для остальных
   - Использовать паттерн из `src/indexer/__tests__/indexer.test.ts` для mock-ов зависимостей
 
-- [ ] Task 11: Тесты для per-batch isolation и JSON validation (depends on 5, 6, 7)
+- [x] Task 11: Тесты для per-batch isolation и JSON validation (depends on 5, 6, 7)
 
   **Deliverable:** Unit-тесты для per-batch error handling и JSON validation.
 
@@ -250,7 +250,7 @@ Decisions:
   - Тест: валидный response проходит без ошибок
   - Паттерн тестов — как в существующем `src/embeddings/__tests__/openai.test.ts`
 
-- [ ] Task 12: Тесты для generator function extraction (depends on 8, 9)
+- [x] Task 12: Тесты для generator function extraction (depends on 8, 9)
 
   **Deliverable:** Unit-тесты для извлечения `function*` и рекурсии в default case.
 

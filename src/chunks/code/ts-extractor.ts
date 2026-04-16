@@ -138,13 +138,16 @@ function visitNode(node: SyntaxNode, result: ExtractedNode[], currentClassName: 
 
   default: {
     // Продолжаем обход для верхнего уровня (program / module) и container-узлов,
-    // внутри которых могут жить объявления (TypeScript namespace, ambient modules).
+    // внутри которых могут жить объявления. Tree-sitter-typescript оборачивает
+    // namespace в expression_statement → internal_module → statement_block,
+    // поэтому в список включаем всё, что встречается по пути до объявлений.
     if (
       node.type === 'program'
       || node.type === 'module'
       || node.type === 'statement_block'
       || node.type === 'internal_module'
       || node.type === 'ambient_declaration'
+      || node.type === 'expression_statement'
     ) {
       if (node.type === 'internal_module' || node.type === 'ambient_declaration') {
         console.log(`[TsExtractor] Recursing into unknown container: ${node.type}`);

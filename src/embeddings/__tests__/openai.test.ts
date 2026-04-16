@@ -164,6 +164,103 @@ describe('OpenAITextEmbedder', () => {
     );
   });
 
+  describe('валидация JSON и структуры ответа', () => {
+    it('truncated JSON → descriptive error с body preview', async () => {
+      // Truncated JSON: открывающая скобка без закрывающей.
+      const truncated = '{"data":[{"index":0,"embedding":[0.1,0.2';
+      fetchMock.mockResolvedValue({
+        ok: true,
+        status: 200,
+        text: async () => truncated,
+      });
+
+      const embedder = new OpenAITextEmbedder(DEFAULT_CONFIG);
+
+      await expect(embedder.embed('test')).rejects.toThrow(/malformed JSON response/);
+      await expect(embedder.embed('test')).rejects.toThrow(/Body\[0\.\.200\]/);
+    });
+
+    it('пустой body → malformed JSON error', async () => {
+      fetchMock.mockResolvedValue({
+        ok: true,
+        status: 200,
+        text: async () => '',
+      });
+
+      const embedder = new OpenAITextEmbedder(DEFAULT_CONFIG);
+
+      await expect(embedder.embed('test')).rejects.toThrow(/malformed JSON/);
+    });
+
+    it('валидный JSON без data-поля → structure error', async () => {
+      fetchMock.mockResolvedValue({
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify({ error: 'unexpected' }),
+      });
+
+      const embedder = new OpenAITextEmbedder(DEFAULT_CONFIG);
+
+      await expect(embedder.embed('test')).rejects.toThrow(/invalid response structure/);
+      await expect(embedder.embed('test')).rejects.toThrow(/missing data array/);
+    });
+
+    it('data не массив → structure error', async () => {
+      fetchMock.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify({ data: 'not an array' }),
+      });
+
+      const embedder = new OpenAITextEmbedder(DEFAULT_CONFIG);
+
+      await expect(embedder.embed('test')).rejects.toThrow(/missing data array/);
+    });
+
+    it('элемент data без index → structure error', async () => {
+      fetchMock.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify({ data: [{ embedding: [0.1, 0.2] }] }),
+      });
+
+      const embedder = new OpenAITextEmbedder(DEFAULT_CONFIG);
+
+      await expect(embedder.embed('test')).rejects.toThrow(/wrong shape/);
+    });
+
+    it('элемент data без embedding → structure error', async () => {
+      fetchMock.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify({ data: [{ index: 0 }] }),
+      });
+
+      const embedder = new OpenAITextEmbedder(DEFAULT_CONFIG);
+
+      await expect(embedder.embed('test')).rejects.toThrow(/wrong shape/);
+    });
+
+    it('валидный response с несколькими эмбеддингами сортируется по index', async () => {
+      fetchMock.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify({
+          data: [
+            { index: 1, embedding: [0.9, 0.9] },
+            { index: 0, embedding: [0.1, 0.1] },
+          ],
+        }),
+      });
+
+      const embedder = new OpenAITextEmbedder({ ...DEFAULT_CONFIG, dimensions: 2 });
+      const results = await embedder.embedBatch(['first', 'second']);
+
+      expect(results[0]).toEqual([0.1, 0.1]);
+      expect(results[1]).toEqual([0.9, 0.9]);
+    });
+  });
+
   describe('retry логика', () => {
     beforeEach(() => {
       vi.useFakeTimers();
