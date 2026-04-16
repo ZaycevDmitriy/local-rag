@@ -188,7 +188,7 @@ Decisions:
 
 ### Phase 3: Generator function extraction
 
-- [ ] Task 8: Добавить `generator_function_declaration` в ts-extractor
+- [x] Task 8: Добавить `generator_function_declaration` в ts-extractor
 
   **Deliverable:** `function*` извлекается как отдельный FUNCTION-чанк с корректным FQN.
 
@@ -205,7 +205,7 @@ Decisions:
   - DEBUG: `[TsExtractor] Extracted generator function: ${fqn}`
   - DEBUG: `[TsExtractor] Extracted generator expression via const: ${fqn}`
 
-- [ ] Task 9: Добавить рекурсию в default case для неизвестных container-узлов
+- [x] Task 9: Добавить рекурсию в default case для неизвестных container-узлов
 
   **Deliverable:** Неизвестные container-узлы (namespace, ambient_declaration) рекурсивно обходятся.
 
