@@ -23,6 +23,7 @@
 - [x] **Export/Import/Re-embed** — tar.gz архивы, SQL export/import, перегенерация эмбеддингов
 - [x] **Optimization & reliability** — retry/overlap/concurrency утилиты, parallel embeddings, source cache, metadata indexes, keyset pagination, unit tests (381)
 - [x] **Branch-aware indexing** — source_views (branch/workspace snapshots), file_blobs + chunk_contents (dedup), narrow/broad vector search, rag gc, export/import v2
+- [x] **Indexing repair & reliability** — repair chunkless indexed_files, per-batch error isolation в embeddings, JSON/структурная валидация провайдера, extraction для generator functions и namespace recursion в ts-extractor
 
 ## Completed
 
@@ -39,3 +40,4 @@
 | Export/Import/Re-embed | 2026-02-15 |
 | Optimization & reliability | 2026-03-14 |
 | Branch-aware indexing | 2026-04-05 |
+| Indexing repair & reliability | 2026-04-16 |
