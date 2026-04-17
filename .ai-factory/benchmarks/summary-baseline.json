@@ -1,0 +1,97 @@
+{
+  "version": 1,
+  "source": "karipos",
+  "description": "Golden set for AI-powered summarization A/B benchmark. Paraphrased developer-style queries.",
+  "queries": [
+    {
+      "query": "how does session token refresh work",
+      "goldenFqns": [
+        "auth.session.refresh",
+        "auth.session.refreshAccessToken"
+      ],
+      "category": "auth",
+      "difficulty": "easy",
+      "seedKind": "manual"
+    },
+    {
+      "query": "where is the payment flow started when user taps pay",
+      "goldenFqns": [
+        "payment.checkout.initiate",
+        "payment.flow.start"
+      ],
+      "category": "payments",
+      "difficulty": "medium",
+      "seedKind": "manual"
+    },
+    {
+      "query": "retry policy for failed http requests",
+      "goldenFqns": [
+        "utils.fetchWithRetry",
+        "utils.retry.computeDelay"
+      ],
+      "category": "infra",
+      "difficulty": "easy",
+      "seedKind": "manual"
+    },
+    {
+      "query": "barcode scanner screen and camera permissions",
+      "goldenFqns": [
+        "scanner.screen.BarcodeScannerScreen",
+        "scanner.permissions.requestCamera"
+      ],
+      "category": "ui",
+      "difficulty": "medium",
+      "seedKind": "manual"
+    },
+    {
+      "query": "how is cart state stored locally after app restart",
+      "goldenFqns": [
+        "cart.persistence.hydrate",
+        "cart.storage.persist"
+      ],
+      "category": "storage",
+      "difficulty": "medium",
+      "seedKind": "manual"
+    },
+    {
+      "query": "print receipt to paired bluetooth printer",
+      "goldenFqns": [
+        "printer.bluetooth.print",
+        "receipt.print.ReceiptPrinter"
+      ],
+      "category": "integration",
+      "difficulty": "medium",
+      "seedKind": "manual"
+    },
+    {
+      "query": "offline queue for sales and sync on reconnect",
+      "goldenFqns": [
+        "sync.offlineQueue",
+        "sales.offline.enqueue"
+      ],
+      "category": "sync",
+      "difficulty": "hard",
+      "seedKind": "hard-case"
+    },
+    {
+      "query": "why is the app splash screen delayed on cold start",
+      "goldenFqns": [
+        "boot.splash.SplashScreen",
+        "boot.coldStart.initialize"
+      ],
+      "category": "perf",
+      "difficulty": "hard",
+      "seedKind": "hard-case"
+    },
+    {
+      "query": "feature flag gating for the new returns flow",
+      "goldenFqns": [
+        "config.featureFlags.returnsFlowV2",
+        "returns.flow.v2"
+      ],
+      "category": "config",
+      "difficulty": "hard",
+      "seedKind": "hard-case"
+    }
+  ]
+}
