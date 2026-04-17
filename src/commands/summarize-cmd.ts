@@ -121,7 +121,11 @@ export const summarizeCommand = new Command('summarize')
           return;
         }
 
-        // Dry-run: оцениваем стоимость и пропуск через gates (на случайной выборке до 500).
+        // Dry-run: оцениваем стоимость и пропуск через gates (на выборке до 500).
+        // Sample детерминирован: getWithNullSummaryForSource сортирует по content_hash.
+        // SHA-256 распределён равномерно, поэтому первые 500 записей по лексикографическому
+        // порядку хэша — репрезентативная выборка, а не смещённая. Это осознанный выбор
+        // вместо `ORDER BY RANDOM()`: одинаковый dry-run между прогонами и в CI.
         if (options.dryRun) {
           const sampleSize = Math.min(500, totalCandidates);
           const sample = await chunkContentStorage.getWithNullSummaryForSource(

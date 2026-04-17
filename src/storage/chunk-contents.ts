@@ -129,7 +129,11 @@ export class ChunkContentStorage {
         AND c.source_type = 'code'
         AND cc.summary IS NULL
         AND (${afterHash ?? null}::text IS NULL OR cc.content_hash > ${afterHash ?? null}::text)
-      ORDER BY cc.content_hash
+      -- Вторичный ORDER BY c.id — стабильный тай-брейкер для DISTINCT ON.
+      -- Без него PostgreSQL отдаёт «первую попавшуюся» строку по physical row order,
+      -- и representative (path/language/metadata) для одного content_hash может меняться
+      -- между прогонами rag summarize → prompt для LLM нестабилен → бенчмарк не воспроизводим.
+      ORDER BY cc.content_hash, c.id
       LIMIT ${limit}
     `;
 

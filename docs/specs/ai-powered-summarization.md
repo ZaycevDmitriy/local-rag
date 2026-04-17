@@ -83,7 +83,10 @@ Language: <lang>    (опционально)
 ## Skip-gates
 
 1. `content.length < 200` → `skip`.
-2. `kind ∈ {TYPE, INTERFACE}` и в content нет doc-комментария (`/**`, `/*!`, `"""`) → `skip`.
+2. `kind ∈ {TYPE, INTERFACE}` **без docstring** → `skip`.
+   - Docstring определяется наличием маркеров `/**`, `/*!` или `"""` в теле чанка.
+   - Если docstring **есть** — тип/интерфейс суммаризируется по docstring + телу (gate не срабатывает).
+   - Если docstring **нет** — тело такого чанка в TS/JS/Java обычно состоит из одних сигнатур полей, и LLM нечего обобщить поверх имени.
 
 Для skipped чанков в `summary` пишется placeholder `[skipped:<reason>]`, чтобы повторный прогон команды не выбирал их снова. `summary_embedding` остаётся NULL — такие чанки не участвуют в 3-way.
 
