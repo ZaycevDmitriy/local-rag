@@ -121,7 +121,7 @@ describe('registerSearchTool', () => {
           sourceName: 'karipos',
           snippet: 'hello',
           coordinates: {},
-          scores: { bm25: 0.5, vector: 0.6, rrf: 0.1, rerank: 0.9 },
+          scores: { bm25: 0.5, vector: 0.6, summaryVector: null, rrf: 0.1, rerank: 0.9 },
         },
       ],
       totalCandidates: 1,

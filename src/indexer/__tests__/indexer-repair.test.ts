@@ -82,6 +82,8 @@ function makeContentRow(contentHash: string): ChunkContentRow {
     content_hash: contentHash,
     content: 'content',
     embedding: [0.1, 0.2],
+    summary: null,
+    summary_embedding: null,
     created_at: new Date(),
   };
 }

@@ -21,7 +21,9 @@ export class ChunkContentStorage {
   async insertBatch(contents: ChunkContentInsert[]): Promise<void> {
     if (contents.length === 0) return;
 
-    console.log(`[ChunkContentStorage] insertBatch: count=${contents.length}`);
+    // Лог идёт в stderr вместо stdout, чтобы MCP-режим не засорял JSON-RPC канал.
+    // Единая политика для всего ChunkContentStorage — см. stdout-discipline.test.ts.
+    console.error(`[ChunkContentStorage] insertBatch: count=${contents.length}`);
 
     for (let i = 0; i < contents.length; i += BATCH_SIZE) {
       const batch = contents.slice(i, i + BATCH_SIZE);
@@ -59,13 +61,140 @@ export class ChunkContentStorage {
     `;
   }
 
+  // Возвращает content rows с NULL summary для backfill-команды rag summarize.
+  // Keyset pagination по content_hash: afterHash — курсор для продолжения после предыдущей пачки.
+  async getWithNullSummary(
+    limit: number,
+    afterHash?: string,
+  ): Promise<ChunkContentRow[]> {
+    if (afterHash) {
+      return await this.sql<ChunkContentRow[]>`
+        SELECT * FROM chunk_contents
+        WHERE summary IS NULL
+          AND content_hash > ${afterHash}
+        ORDER BY content_hash
+        LIMIT ${limit}
+      `;
+    }
+
+    return await this.sql<ChunkContentRow[]>`
+      SELECT * FROM chunk_contents
+      WHERE summary IS NULL
+      ORDER BY content_hash
+      LIMIT ${limit}
+    `;
+  }
+
+  // Возвращает количество chunk_contents с NULL summary (для dry-run и прогресса).
+  async countWithNullSummary(): Promise<number> {
+    const rows = await this.sql<Array<{ count: string }>>`
+      SELECT COUNT(*)::text AS count FROM chunk_contents WHERE summary IS NULL
+    `;
+    return Number(rows[0]?.count ?? 0);
+  }
+
+  // Полный payload для summarize-команды: один content_hash + один representative
+  // occurrence со всеми полями, нужными для prompt/gate.
+  // Source-scoped, фильтр по source_type='code'.
+  async getWithNullSummaryForSource(
+    sourceId: string,
+    limit: number,
+    afterHash?: string,
+  ): Promise<Array<{
+    content_hash: string;
+    content: string;
+    path: string;
+    source_type: string;
+    language: string | null;
+    metadata: Record<string, unknown>;
+  }>> {
+    const rows = await this.sql<Array<{
+      content_hash: string;
+      content: string;
+      path: string;
+      source_type: string;
+      language: string | null;
+      metadata: Record<string, unknown>;
+    }>>`
+      SELECT DISTINCT ON (cc.content_hash)
+        cc.content_hash,
+        cc.content,
+        c.path,
+        c.source_type,
+        c.language,
+        c.metadata
+      FROM chunk_contents cc
+      JOIN chunks c ON c.chunk_content_hash = cc.content_hash
+      JOIN indexed_files f ON c.indexed_file_id = f.id
+      JOIN source_views sv ON f.source_view_id = sv.id
+      WHERE sv.source_id = ${sourceId}
+        AND c.source_type = 'code'
+        AND cc.summary IS NULL
+        AND (${afterHash ?? null}::text IS NULL OR cc.content_hash > ${afterHash ?? null}::text)
+      -- Вторичный ORDER BY c.id — стабильный тай-брейкер для DISTINCT ON.
+      -- Без него PostgreSQL отдаёт «первую попавшуюся» строку по physical row order,
+      -- и representative (path/language/metadata) для одного content_hash может меняться
+      -- между прогонами rag summarize → prompt для LLM нестабилен → бенчмарк не воспроизводим.
+      ORDER BY cc.content_hash, c.id
+      LIMIT ${limit}
+    `;
+
+    return rows;
+  }
+
+  // Количество кандидатов на суммаризацию для source (до применения gates).
+  async countWithNullSummaryForSource(sourceId: string): Promise<number> {
+    const rows = await this.sql<Array<{ count: string }>>`
+      SELECT COUNT(DISTINCT cc.content_hash)::text AS count
+      FROM chunk_contents cc
+      JOIN chunks c ON c.chunk_content_hash = cc.content_hash
+      JOIN indexed_files f ON c.indexed_file_id = f.id
+      JOIN source_views sv ON f.source_view_id = sv.id
+      WHERE sv.source_id = ${sourceId}
+        AND c.source_type = 'code'
+        AND cc.summary IS NULL
+    `;
+
+    return Number(rows[0]?.count ?? 0);
+  }
+
+  // Атомарно обновляет summary и summary_embedding одним UPDATE per-row внутри транзакции-батча.
+  // embedding: null пишет SQL NULL — для плейсхолдеров `[skipped:...]` и `[failed:...]`,
+  // которые не должны попадать в 3-way поиск и перевыбираться на следующем прогоне.
+  // Атомарность гарантирует, что после падения процесса в БД не останется строк с
+  // summary != NULL и summary_embedding = NULL (раньше это было отдельными транзакциями).
+  async updateSummaryWithEmbedding(
+    updates: Array<{ contentHash: string; summary: string; embedding: number[] | null }>,
+  ): Promise<void> {
+    if (updates.length === 0) return;
+
+    console.error(`[ChunkContentStorage] updateSummaryWithEmbedding: count=${updates.length}`);
+
+    for (let i = 0; i < updates.length; i += BATCH_SIZE) {
+      const batch = updates.slice(i, i + BATCH_SIZE);
+
+      await this.sql.begin(async (tx) => {
+        for (const update of batch) {
+          const vectorStr = update.embedding === null
+            ? null
+            : (pgvector.toSql(update.embedding) as string);
+
+          await tx.unsafe(
+            'UPDATE chunk_contents SET summary = $1, summary_embedding = $2::vector WHERE content_hash = $3',
+            [update.summary, vectorStr, update.contentHash],
+          );
+        }
+      });
+    }
+  }
+
   // Обновляет embeddings пачками.
   async updateEmbeddings(
     updates: Array<{ contentHash: string; embedding: number[] }>,
   ): Promise<void> {
     if (updates.length === 0) return;
 
-    console.log(`[ChunkContentStorage] updateEmbeddings: count=${updates.length}`);
+    console.error(`[ChunkContentStorage] updateEmbeddings: count=${updates.length}`);
 
     for (let i = 0; i < updates.length; i += BATCH_SIZE) {
       const batch = updates.slice(i, i + BATCH_SIZE);
@@ -87,7 +216,7 @@ export class ChunkContentStorage {
   // Удаляет orphan chunk_contents, на которые не ссылается ни один chunk.
   // Grace period — минуты с момента создания.
   async deleteOrphans(gracePeriodMinutes = 60): Promise<number> {
-    console.log(`[ChunkContentStorage] deleteOrphans: gracePeriod=${gracePeriodMinutes}min`);
+    console.error(`[ChunkContentStorage] deleteOrphans: gracePeriod=${gracePeriodMinutes}min`);
 
     const result = await this.sql`
       DELETE FROM chunk_contents cc
@@ -98,7 +227,7 @@ export class ChunkContentStorage {
       AND cc.created_at < now() - ${gracePeriodMinutes + ' minutes'}::interval
     `;
 
-    console.log(`[ChunkContentStorage] deleteOrphans: deleted=${result.count}`);
+    console.error(`[ChunkContentStorage] deleteOrphans: deleted=${result.count}`);
 
     return result.count;
   }
@@ -186,5 +315,63 @@ export class ChunkContentStorage {
       [vectorStr, limit],
     );
     return rows.map((r) => ({ contentHash: r.content_hash, score: 1 - Number(r.distance) }));
+  }
+
+  /**
+   * Vector search по chunk_contents.summary_embedding через partial HNSW-индекс.
+   * Строки с NULL summary_embedding игнорируются (graceful — partial index не включает их).
+   * contentHashes — optional prefilter (narrow mode).
+   */
+  async searchSummaryVector(
+    queryEmbedding: number[],
+    limit: number,
+    contentHashes?: string[],
+  ): Promise<Array<{ contentHash: string; score: number }>> {
+    const vectorStr = pgvector.toSql(queryEmbedding) as string;
+
+    console.error(`[ChunkContentStorage] searchSummaryVector: limit=${limit}, prefilter=${contentHashes?.length ?? 'none'}`);
+
+    if (contentHashes && contentHashes.length > 0) {
+      // Narrow: exact search по prefiltered set (только non-NULL summary_embedding).
+      const rows = await this.sql.unsafe<Array<{ content_hash: string; distance: number }>>(
+        `SELECT content_hash, summary_embedding <=> $1::vector AS distance
+         FROM chunk_contents
+         WHERE summary_embedding IS NOT NULL
+           AND content_hash = ANY($2)
+         ORDER BY distance
+         LIMIT $3`,
+        [vectorStr, contentHashes, limit],
+      );
+      return rows.map((r) => ({ contentHash: r.content_hash, score: 1 - Number(r.distance) }));
+    }
+
+    // Broad: ANN по partial HNSW индексу (автоматически пропускает NULL).
+    const rows = await this.sql.unsafe<Array<{ content_hash: string; distance: number }>>(
+      `SELECT content_hash, summary_embedding <=> $1::vector AS distance
+       FROM chunk_contents
+       WHERE summary_embedding IS NOT NULL
+       ORDER BY summary_embedding <=> $1::vector
+       LIMIT $2`,
+      [vectorStr, limit],
+    );
+    return rows.map((r) => ({ contentHash: r.content_hash, score: 1 - Number(r.distance) }));
+  }
+
+  // Возвращает true, если в source_view есть хотя бы один chunk_contents с non-NULL summary_embedding.
+  // Используется SearchCoordinator для graceful fallback на 2-way.
+  async hasSummaryForViews(sourceViewIds: string[]): Promise<boolean> {
+    if (sourceViewIds.length === 0) return false;
+
+    const rows = await this.sql<Array<{ exists: boolean }>>`
+      SELECT EXISTS (
+        SELECT 1
+        FROM chunk_contents cc
+        JOIN chunks c ON c.chunk_content_hash = cc.content_hash
+        WHERE cc.summary_embedding IS NOT NULL
+          AND c.source_view_id = ANY(${sourceViewIds})
+      ) AS exists
+    `;
+
+    return rows[0]?.exists ?? false;
   }
 }

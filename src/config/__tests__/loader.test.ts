@@ -208,6 +208,109 @@ describe('AppConfigSchema', () => {
     expect(config.reranker.siliconflow?.topK).toBe(5);
     expect(config.indexing.strictAst).toBe(true);
   });
+
+  it('дефолты summarization и 3-way search устанавливаются корректно', () => {
+    const config = AppConfigSchema.parse({});
+
+    expect(config.search.summaryVectorWeight).toBe(0.0);
+    expect(config.search.useSummaryVector).toBe(false);
+    expect(config.summarization.provider).toBe('siliconflow');
+    expect(config.summarization.model).toBe('Qwen/Qwen2.5-7B-Instruct');
+    expect(config.summarization.concurrency).toBe(4);
+    expect(config.summarization.timeoutMs).toBe(60_000);
+    expect(config.summarization.cost.dryRunRequired).toBe(true);
+    expect(config.summarization.cost.avgTokensPerChunk).toBe(200);
+    // Qwen2.5-7B на SiliconFlow: $0.05 / 1M = 5e-8 / токен.
+    expect(config.summarization.cost.pricePerTokenUsd).toBeCloseTo(0.05 / 1_000_000, 12);
+  });
+
+  it('summarization.concurrency отбрасывает значения больше 64', () => {
+    expect(() => {
+      AppConfigSchema.parse({
+        summarization: {
+          concurrency: 1000,
+        },
+      });
+    }).toThrow();
+  });
+
+  it('summarization.concurrency принимает граничное значение 64', () => {
+    const config = AppConfigSchema.parse({
+      summarization: {
+        concurrency: 64,
+      },
+    });
+    expect(config.summarization.concurrency).toBe(64);
+  });
+
+  it('summarization.cost позволяет переопределить avgTokensPerChunk и pricePerTokenUsd', () => {
+    const config = AppConfigSchema.parse({
+      summarization: {
+        model: 'custom/model',
+        cost: {
+          avgTokensPerChunk: 500,
+          pricePerTokenUsd: 1e-6,
+        },
+      },
+    });
+    expect(config.summarization.cost.avgTokensPerChunk).toBe(500);
+    expect(config.summarization.cost.pricePerTokenUsd).toBe(1e-6);
+  });
+
+  it('принимает сбалансированные веса при useSummaryVector=true', () => {
+    const config = AppConfigSchema.parse({
+      search: {
+        bm25Weight: 0.2,
+        vectorWeight: 0.5,
+        summaryVectorWeight: 0.3,
+        useSummaryVector: true,
+      },
+    });
+
+    expect(config.search.useSummaryVector).toBe(true);
+    expect(config.search.summaryVectorWeight).toBeCloseTo(0.3);
+  });
+
+  it('бросает Zod ошибку при useSummaryVector=true и сумме весов вне допуска', () => {
+    expect(() => {
+      AppConfigSchema.parse({
+        search: {
+          bm25Weight: 0.3,
+          vectorWeight: 0.7,
+          summaryVectorWeight: 0.3,
+          useSummaryVector: true,
+        },
+      });
+    }).toThrow(/сумма весов/);
+  });
+
+  it('не валидирует сумму весов при useSummaryVector=false', () => {
+    const config = AppConfigSchema.parse({
+      search: {
+        bm25Weight: 0.3,
+        vectorWeight: 0.7,
+        summaryVectorWeight: 5.0,
+        useSummaryVector: false,
+      },
+    });
+
+    expect(config.search.summaryVectorWeight).toBe(5.0);
+  });
+
+  it('парсит summarize: true на источнике', () => {
+    const config = AppConfigSchema.parse({
+      sources: [
+        {
+          name: 'my-project',
+          type: 'local',
+          path: '/home/user/project',
+          summarize: true,
+        },
+      ],
+    });
+
+    expect(config.sources[0]!.summarize).toBe(true);
+  });
 });
 
 // --- loadConfig ---

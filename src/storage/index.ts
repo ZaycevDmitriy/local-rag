@@ -18,6 +18,7 @@ export { createVectorDimensionsMigration } from './migrations/002_vector_dimensi
 export { default as pathIndexMigration } from './migrations/003_path_index.js';
 export { default as metadataIndexesMigration } from './migrations/004_metadata_indexes.js';
 export { createBranchViewsRebuildMigration } from './migrations/005_branch_views_rebuild.js';
+export { createSummarizationMigration } from './migrations/006_summarization.js';
 
 export { SourceStorage } from './sources.js';
 export { SourceViewStorage } from './source-views.js';

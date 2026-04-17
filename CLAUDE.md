@@ -8,7 +8,7 @@ Local RAG — персональная система семантическог
 
 Полная спецификация: `local-rag-spec-new.md`
 
-**Статус:** проект в активной разработке. Реализованы фазы 1–10, включая branch-aware индексацию (фаза 10).
+**Статус:** проект в активной разработке. Реализованы фазы 1–11, включая branch-aware индексацию (фаза 10) и AI-powered summarization (фаза 11).
 
 ## Tech Stack
 
@@ -40,17 +40,21 @@ Local RAG — персональная система семантическог
 | `src/indexer/` | Branch-aware индексация: snapshot detection, view reconciliation, blob/content dedup, прогресс |
 | `src/export/` | Export/import v2: manifest, archive (tar.gz), SQL exporter/importer (6 таблиц), sanitizer |
 | `src/config/` | Zod-схема конфига, загрузка YAML, дефолты |
+| `src/summarize/` | LLM-суммаризация чанков: Summarizer-интерфейс, SiliconFlow/Mock, prompt, skip-gates |
 
 ### Search Pipeline
 
 ```
 Query -> resolve active_view_id (per source) -> embed query
-  -> parallel [BM25 (tsvector, top 50) + Vector (narrow/broad, top 50)]
-  -> content-level dedup (per chunk_content_hash) -> RRF Fusion (k=60)
+  -> parallel [BM25 (tsvector, top 50) + Vector (narrow/broad, top 50)
+              + optional vec-summary (narrow/broad, top 50)]
+  -> content-level dedup (per chunk_content_hash) -> RRF Fusion (k=60, 2-way или 3-way)
   -> Rerank (top 50 -> top 10) -> Response
 ```
 
 Branch-aware: optional `branch` parameter в MCP `search` tool выбирает конкретный `source_view` вместо `active_view_id`. Vector search использует narrow mode (exact по prefiltered set) если кандидатов < 10K, иначе broad mode (ANN + escalation + fallback).
+
+3-way поиск (vec-summary) включается через `search.useSummaryVector: true` в конфиге и автоматически даунгрейдится до 2-way, если у источника нет ни одного non-NULL `summary_embedding`. Summary генерируется командой `rag summarize --source <name>` (opt-in через `sources[].summarize: true`). Подробности — `docs/specs/ai-powered-summarization.md`.
 
 ### Key Interfaces
 
@@ -78,20 +82,21 @@ rag export --all        # Экспорт всех источников в .tar.g
 rag import <file> --all # Импорт из архива (только v2; v1 отклоняется)
 rag re-embed            # Генерация эмбеддингов для NULL чанков (через chunk_contents)
 rag gc                  # Очистка orphan file_blobs и chunk_contents
+rag summarize --source <name> [--dry-run] [--limit N]   # Backfill LLM-summary (opt-in per source)
 ```
 
 ## Database
 
-PostgreSQL с расширением pgvector. Шесть таблиц (миграции 001–005):
+PostgreSQL с расширением pgvector. Шесть таблиц (миграции 001–006):
 
 - `sources` — логические источники (name, type, path/git_url, repo_root_path, repo_subpath, active_view_id)
 - `source_views` — branch/workspace снимки источника (view_kind, ref_name, head_commit_oid, snapshot_fingerprint, chunk_count)
 - `file_blobs` — тела файлов с дедупликацией по content_hash (единое хранилище для snapshot reads)
 - `indexed_files` — файлы внутри view (source_view_id, path, content_hash → file_blobs)
-- `chunk_contents` — дедуплицированные тела чанков с `embedding vector(N)` и `search_vector tsvector` (generated)
+- `chunk_contents` — дедуплицированные тела чанков с `embedding vector(N)`, `search_vector tsvector` (generated), `summary TEXT NULL` и `summary_embedding vector(N) NULL` (миграция 006)
 - `chunks` — occurrence-level строки (source_view_id, indexed_file_id, chunk_content_hash, path, ordinal, координаты)
 
-HNSW-индекс на `chunk_contents.embedding`, GIN-индекс на `chunk_contents.search_vector`. Размерность вектора зависит от провайдера (Jina v3: 1024, OpenAI text-embedding-3-small: 1536, SiliconFlow Qwen3-Embedding-0.6B: 1024). После destructive migration 005 требуется полная переиндексация (`rag index --all`).
+HNSW-индекс на `chunk_contents.embedding`, partial HNSW-индекс на `chunk_contents.summary_embedding WHERE summary_embedding IS NOT NULL`, GIN-индекс на `chunk_contents.search_vector`. Размерность вектора зависит от провайдера (Jina v3: 1024, OpenAI text-embedding-3-small: 1536, SiliconFlow Qwen3-Embedding-0.6B: 1024). После destructive migration 005 требуется полная переиндексация (`rag index --all`). Миграция 006 non-destructive — применяется поверх.
 
 ## Configuration
 
@@ -99,8 +104,9 @@ HNSW-индекс на `chunk_contents.embedding`, GIN-индекс на `chunk_
 - `database` — подключение к PostgreSQL
 - `embeddings` — провайдер (`jina` / `openai` / `siliconflow`), API ключи через `${ENV_VAR}`
 - `reranker` — провайдер (`jina` / `siliconflow` / `none`)
-- `search` — веса BM25/vector, RRF k, topK параметры
-- `sources` — список источников с include/exclude паттернами
+- `search` — веса BM25/vector/summaryVector, RRF k, topK параметры, `useSummaryVector`
+- `summarization` — провайдер LLM (`siliconflow` / `mock`), model, concurrency, timeoutMs, cost
+- `sources` — список источников с include/exclude паттернами (`summarize: true` для opt-in в суммаризацию)
 - `indexing` — размер чанков, overlap, директория для git-клонов
 
 ## Implementation Phases
@@ -115,6 +121,7 @@ HNSW-индекс на `chunk_contents.embedding`, GIN-индекс на `chunk_
 8. **Config path resolution** — --config, RAG_CONFIG, resolveConfigPath
 9. **Export/Import/Re-embed** — backup/restore, перенос данных, перегенерация эмбеддингов
 10. **Branch-aware indexing** — source_views, file_blobs, chunk_contents; branch/workspace snapshots; narrow/broad vector search; rag gc; export/import v2
+11. **AI-powered summarization** — миграция 006 (summary/summary_embedding + partial HNSW), `rag summarize` backfill, 3-way RRF (BM25 + vec-content + vec-summary) с graceful fallback; провайдер SiliconFlow (`Qwen/Qwen2.5-7B-Instruct`)
 
 ## MCP Servers
 

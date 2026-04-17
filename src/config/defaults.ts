@@ -19,10 +19,23 @@ export const defaultConfig: AppConfig = {
   search: {
     bm25Weight: 0.4,
     vectorWeight: 0.6,
+    summaryVectorWeight: 0.0,
     retrieveTopK: 50,
     finalTopK: 10,
     rrf: {
       k: 60,
+    },
+    useSummaryVector: false,
+  },
+  summarization: {
+    provider: 'siliconflow',
+    model: 'Qwen/Qwen2.5-7B-Instruct',
+    concurrency: 4,
+    timeoutMs: 60_000,
+    cost: {
+      dryRunRequired: true,
+      avgTokensPerChunk: 200,
+      pricePerTokenUsd: 0.05 / 1_000_000,
     },
   },
   sources: [],

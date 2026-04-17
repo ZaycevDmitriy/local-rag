@@ -4,12 +4,12 @@
 
 ## Milestones
 
+- [x] **AI-powered summarization** — LLM-генерация описаний чанков, 3-way hybrid search (BM25 + vec-content + vec-summary) через SiliconFlow
 - [ ] **Python tree-sitter extractor** — AST-парсинг Python: функции, классы, декораторы, docstrings
 - [ ] **Go tree-sitter extractor** — AST-парсинг Go: functions, structs, interfaces, methods with receivers
 - [ ] **Rust tree-sitter extractor** — AST-парсинг Rust: impl blocks, traits, macros, lifetime annotations
 - [ ] **Self-hosted embeddings (Ollama)** — реализация TextEmbedder для локальных моделей (stub уже в factory.ts)
 - [ ] **Code dependency graph** — граф связей (CALLS, INHERITS) через tree-sitter AST, новый MCP tool traverse_graph (spec 11.1)
-- [ ] **AI-powered summarization** — LLM-генерация описаний чанков, dual-vector search по content + summary (spec 11.4)
 - [ ] **Async indexing queue** — фоновая индексация с прогрессом, снятие блокировки CLI (spec 12)
 - [ ] **Web UI** — HTTP-сервер для просмотра sources, тестирования запросов, статистики
 - [x] **Core: config, storage, chunking, search, CLI** — PostgreSQL + pgvector, markdown/fixed chunking, Jina embeddings, hybrid search (BM25+vector+RRF), CLI init/index
@@ -41,3 +41,4 @@
 | Optimization & reliability | 2026-03-14 |
 | Branch-aware indexing | 2026-04-05 |
 | Indexing repair & reliability | 2026-04-16 |
+| AI-powered summarization | 2026-04-17 |

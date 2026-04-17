@@ -11,6 +11,7 @@ import { exportCommand } from './commands/export-cmd.js';
 import { importCommand } from './commands/import-cmd.js';
 import { reEmbedCommand } from './commands/re-embed-cmd.js';
 import { gcCommand } from './commands/gc-cmd.js';
+import { summarizeCommand } from './commands/summarize-cmd.js';
 
 const program = new Command()
   .name('rag')
@@ -26,5 +27,6 @@ program.addCommand(exportCommand);
 program.addCommand(importCommand);
 program.addCommand(reEmbedCommand);
 program.addCommand(gcCommand);
+program.addCommand(summarizeCommand);
 
 program.parse();

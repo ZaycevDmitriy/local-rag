@@ -64,13 +64,77 @@ export const RrfConfigSchema = z.object({
   k: z.number().default(60),
 });
 
+// Допуск суммы весов поиска при включённом 3-way (bm25 + vector + summaryVector).
+const WEIGHT_SUM_TOLERANCE = 0.01;
+
 // Схема параметров поиска.
+// При useSummaryVector: true сумма весов (bm25Weight + vectorWeight + summaryVectorWeight)
+// должна находиться в окрестности 1.0 ± WEIGHT_SUM_TOLERANCE.
+// При useSummaryVector: false summaryVectorWeight игнорируется на runtime.
 export const SearchConfigSchema = z.object({
   bm25Weight: z.number().default(0.4),
   vectorWeight: z.number().default(0.6),
+  summaryVectorWeight: z.number().default(0.0),
   retrieveTopK: z.number().default(50),
   finalTopK: z.number().default(10),
   rrf: RrfConfigSchema.default(() => ({ k: 60 })),
+  // Включает 3-way RRF поиск (BM25 + vec-content + vec-summary).
+  useSummaryVector: z.boolean().default(false),
+}).superRefine((cfg, ctx) => {
+  if (!cfg.useSummaryVector) return;
+  const sum = cfg.bm25Weight + cfg.vectorWeight + cfg.summaryVectorWeight;
+  if (Math.abs(sum - 1.0) > WEIGHT_SUM_TOLERANCE) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['summaryVectorWeight'],
+      message:
+        'search: при useSummaryVector=true сумма весов (bm25Weight + vectorWeight + summaryVectorWeight) ' +
+        `должна быть 1.0 ± ${WEIGHT_SUM_TOLERANCE}, получено ${sum.toFixed(3)} ` +
+        `(bm25=${cfg.bm25Weight}, vector=${cfg.vectorWeight}, summary=${cfg.summaryVectorWeight})`,
+    });
+  }
+});
+
+// Схема конфигурации summarization (LLM-генерация описаний чанков).
+// Фича opt-in per source через `sources[].summarize: true`.
+
+// Дефолтная цена за токен модели Qwen2.5-7B на SiliconFlow ($0.05 / 1M токенов).
+// При смене `summarization.model` пользователь обязан задать собственный `pricePerTokenUsd`,
+// иначе dry-run покажет оценку для Qwen и введёт в заблуждение.
+const QWEN_DEFAULT_PRICE_PER_TOKEN_USD = 0.05 / 1_000_000;
+
+// Дефолтная средняя длина контента в токенах (грубая оценка, согласована с планом T07).
+const DEFAULT_AVG_TOKENS_PER_CHUNK = 200;
+
+// Верхняя граница concurrency: защищает от rate-limit-шторма у провайдера.
+// 64 выбрано как разумный максимум — выше провайдеры SiliconFlow/OpenAI реально не допустят.
+const MAX_SUMMARIZATION_CONCURRENCY = 64;
+
+export const SummarizationCostSchema = z.object({
+  // Требовать запуск `rag summarize --dry-run` с выводом cost estimate до первого реального прогона.
+  dryRunRequired: z.boolean().default(true),
+  // Средняя длина контента чанка в токенах. Используется dry-run оценкой.
+  avgTokensPerChunk: z.number().int().positive().default(DEFAULT_AVG_TOKENS_PER_CHUNK),
+  // Цена за один токен в USD. Дефолт рассчитан для Qwen2.5-7B-Instruct на SiliconFlow.
+  // При смене `summarization.model` обязательно переопределить.
+  pricePerTokenUsd: z.number().nonnegative().default(QWEN_DEFAULT_PRICE_PER_TOKEN_USD),
+});
+
+export const SummarizationConfigSchema = z.object({
+  provider: z.enum(['siliconflow', 'mock']).default('siliconflow'),
+  model: z.string().default('Qwen/Qwen2.5-7B-Instruct'),
+  apiKey: z.string().optional(),
+  baseUrl: z.string().optional(),
+  // Параллельность вызовов LLM — ограничивает rate limits провайдера.
+  // Верхняя граница предотвращает пользовательскую ошибку вида `concurrency: 1000`.
+  concurrency: z.number().int().positive().max(MAX_SUMMARIZATION_CONCURRENCY).default(4),
+  // HTTP timeout per request в миллисекундах.
+  timeoutMs: z.number().int().positive().default(60_000),
+  cost: SummarizationCostSchema.default(() => ({
+    dryRunRequired: true,
+    avgTokensPerChunk: DEFAULT_AVG_TOKENS_PER_CHUNK,
+    pricePerTokenUsd: QWEN_DEFAULT_PRICE_PER_TOKEN_USD,
+  })),
 });
 
 // Схема источника данных.
@@ -82,6 +146,8 @@ export const SourceConfigSchema = z.object({
   branch: z.string().optional(),
   include: z.array(z.string()).optional(),
   exclude: z.array(z.string()).optional(),
+  // Opt-in: разрешить LLM-суммаризацию чанков этого источника командой `rag summarize`.
+  summarize: z.boolean().optional(),
 });
 
 // Схема параметров индексации.
@@ -115,9 +181,22 @@ export const AppConfigSchema = z.object({
   search: SearchConfigSchema.default(() => ({
     bm25Weight: 0.4,
     vectorWeight: 0.6,
+    summaryVectorWeight: 0.0,
     retrieveTopK: 50,
     finalTopK: 10,
     rrf: { k: 60 },
+    useSummaryVector: false,
+  })),
+  summarization: SummarizationConfigSchema.default(() => ({
+    provider: 'siliconflow' as const,
+    model: 'Qwen/Qwen2.5-7B-Instruct',
+    concurrency: 4,
+    timeoutMs: 60_000,
+    cost: {
+      dryRunRequired: true,
+      avgTokensPerChunk: DEFAULT_AVG_TOKENS_PER_CHUNK,
+      pricePerTokenUsd: QWEN_DEFAULT_PRICE_PER_TOKEN_USD,
+    },
   })),
   sources: z.array(SourceConfigSchema).default([]),
   indexing: IndexingConfigSchema.default(() => ({
@@ -140,4 +219,6 @@ export type RrfConfig = z.infer<typeof RrfConfigSchema>;
 export type SearchConfig = z.infer<typeof SearchConfigSchema>;
 export type SourceConfig = z.infer<typeof SourceConfigSchema>;
 export type IndexingConfig = z.infer<typeof IndexingConfigSchema>;
+export type SummarizationCostConfig = z.infer<typeof SummarizationCostSchema>;
+export type SummarizationConfig = z.infer<typeof SummarizationConfigSchema>;
 export type AppConfig = z.infer<typeof AppConfigSchema>;

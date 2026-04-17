@@ -190,4 +190,75 @@ describe('rrfFuse', () => {
       expect(result[i - 1]!.score).toBeGreaterThanOrEqual(result[i]!.score);
     }
   });
+
+  // --- 3-way RRF (фича AI-powered summarization). ---
+
+  describe('3-way RRF (summary vector)', () => {
+    it('суммирует вклад третьего списка когда summaryVectorWeight > 0', () => {
+      const bm25: ScoredChunk[] = [{ id: 'a', score: 0.9 }];
+      const vec: ScoredChunk[] = [{ id: 'a', score: 0.8 }];
+      const summary: ScoredChunk[] = [{ id: 'a', score: 0.7 }];
+
+      const result = rrfFuse(bm25, vec, 60, 0.2, 0.5, summary, 0.3);
+
+      // Документ 'a': 0.2/61 + 0.5/61 + 0.3/61 = 1/61.
+      const expected = 0.2 / 61 + 0.5 / 61 + 0.3 / 61;
+      expect(result[0]!.score).toBeCloseTo(expected, 10);
+    });
+
+    it('документ только в summary-списке попадает в fused', () => {
+      const bm25: ScoredChunk[] = [{ id: 'a', score: 0.9 }];
+      const vec: ScoredChunk[] = [{ id: 'b', score: 0.9 }];
+      const summary: ScoredChunk[] = [{ id: 'c', score: 0.9 }];
+
+      const result = rrfFuse(bm25, vec, 60, 0.2, 0.5, summary, 0.3);
+      expect(result).toHaveLength(3);
+      const ids = result.map((r) => r.id).sort();
+      expect(ids).toEqual(['a', 'b', 'c']);
+    });
+
+    it('summaryVectorWeight=0 → третий список игнорируется (2-way фактически)', () => {
+      const bm25: ScoredChunk[] = [{ id: 'a', score: 0.9 }];
+      const vec: ScoredChunk[] = [{ id: 'a', score: 0.8 }];
+      const summary: ScoredChunk[] = [{ id: 'z', score: 0.5 }];
+
+      const result = rrfFuse(bm25, vec, 60, 0.4, 0.6, summary, 0);
+
+      // Документ 'z' не попадает в fused, так как его вклад × 0 = 0.
+      expect(result.find((r) => r.id === 'z')).toBeUndefined();
+      expect(result.find((r) => r.id === 'a')).toBeDefined();
+    });
+
+    it('дедупликация между всеми тремя списками по id', () => {
+      const bm25: ScoredChunk[] = [
+        { id: 'x', score: 0.9 },
+        { id: 'y', score: 0.8 },
+      ];
+      const vec: ScoredChunk[] = [
+        { id: 'y', score: 0.9 },
+        { id: 'z', score: 0.8 },
+      ];
+      const summary: ScoredChunk[] = [
+        { id: 'x', score: 0.9 },
+        { id: 'z', score: 0.8 },
+      ];
+
+      const result = rrfFuse(bm25, vec, 60, 0.2, 0.5, summary, 0.3);
+
+      // 3 уникальных документа.
+      expect(result).toHaveLength(3);
+      const ids = result.map((r) => r.id).sort();
+      expect(ids).toEqual(['x', 'y', 'z']);
+    });
+
+    it('пустой summary-список с ненулевым весом не ломает RRF', () => {
+      const bm25: ScoredChunk[] = [{ id: 'a', score: 0.9 }];
+      const vec: ScoredChunk[] = [{ id: 'a', score: 0.8 }];
+
+      const result = rrfFuse(bm25, vec, 60, 0.2, 0.5, [], 0.3);
+
+      const expected = 0.2 / 61 + 0.5 / 61;
+      expect(result[0]!.score).toBeCloseTo(expected, 10);
+    });
+  });
 });

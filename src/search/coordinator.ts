@@ -27,10 +27,20 @@ const NARROW_THRESHOLD = 10_000;
 // TTL кэша sources (мс).
 const SOURCE_CACHE_TTL_MS = 5 * 60 * 1000;
 
+// TTL кэша hasSummaryForViews (мс). Соответствует SOURCE_CACHE_TTL_MS.
+// Допустимая задержка отражения `rag summarize` в MCP: false→true подхватится
+// после истечения TTL. Это компромисс между горячим путём search и свежестью.
+const SUMMARY_CACHE_TTL_MS = 5 * 60 * 1000;
+
+// Максимум записей summary-кэша для предотвращения unbounded growth.
+// Достаточно для десятков branch-views; при превышении удаляется самая старая.
+const SUMMARY_CACHE_MAX_ENTRIES = 128;
+
 // Оркестратор branch-aware hybrid search pipeline.
 export class SearchCoordinator {
   private sourceCache: Map<string, SourceRow> | null = null;
   private sourceCacheUpdatedAt = 0;
+  private summaryCache: Map<string, { result: boolean; at: number }> = new Map();
 
   constructor(
     private chunkStorage: ChunkStorage,
@@ -86,23 +96,45 @@ export class SearchCoordinator {
     // 3. Embed query.
     const queryEmbedding = await this.embedder.embedQuery(query.query);
 
-    // 4. Parallel BM25 + vector (content-level).
+    // 4. Parallel BM25 + vector (+ optional summary vector).
     const topK = this.searchConfig.retrieveTopK;
     const hashesForSearch = isNarrow ? contentHashes : undefined;
 
-    const [bm25Results, vectorResults] = await Promise.all([
-      this.chunkContentStorage!.searchBm25(query.query, topK, hashesForSearch),
-      this.chunkContentStorage!.searchVector(queryEmbedding, topK, hashesForSearch),
+    // Решение про 3-way: флаг + наличие хотя бы одного non-NULL summary_embedding в views.
+    const wantSummary = this.searchConfig.useSummaryVector === true;
+    const hasSummary = wantSummary
+      ? await this.checkSummaryForViewsCached(filters.sourceViewIds)
+      : false;
+    const run3Way = wantSummary && hasSummary;
+
+    console.error(
+      `[search] 3-way: wantSummary=${wantSummary}, hasSummary=${hasSummary}, run3Way=${run3Way}`,
+    );
+
+    const bm25Promise = this.chunkContentStorage!
+      .searchBm25(query.query, topK, hashesForSearch);
+    const vectorPromise = this.chunkContentStorage!
+      .searchVector(queryEmbedding, topK, hashesForSearch);
+    const summaryPromise = run3Way
+      ? this.chunkContentStorage!.searchSummaryVector(queryEmbedding, topK, hashesForSearch)
+      : Promise.resolve<Array<{ contentHash: string; score: number }>>([]);
+
+    const [bm25Results, vectorResults, summaryResults] = await Promise.all([
+      bm25Promise,
+      vectorPromise,
+      summaryPromise,
     ]);
 
     // 5. Collect all scored content hashes.
     const allContentHashes = new Set([
       ...bm25Results.map((r) => r.contentHash),
       ...vectorResults.map((r) => r.contentHash),
+      ...summaryResults.map((r) => r.contentHash),
     ]);
 
     if (allContentHashes.size === 0) {
-      return { results: [], totalCandidates: 0, retrievalMode: mode };
+      const retrievalMode = run3Way ? `${mode}+summary` : mode;
+      return { results: [], totalCandidates: 0, retrievalMode };
     }
 
     // 6. Resolve → occurrence-level (dedup: one per content_hash per view).
@@ -119,9 +151,11 @@ export class SearchCoordinator {
     // 7. Convert content scores → occurrence-level ScoredChunk.
     const bm25ScoreMap = new Map(bm25Results.map((r) => [r.contentHash, r.score]));
     const vectorScoreMap = new Map(vectorResults.map((r) => [r.contentHash, r.score]));
+    const summaryScoreMap = new Map(summaryResults.map((r) => [r.contentHash, r.score]));
 
     const bm25Occurrences: ScoredChunk[] = [];
     const vectorOccurrences: ScoredChunk[] = [];
+    const summaryOccurrences: ScoredChunk[] = [];
 
     for (const [contentHash, occ] of hashToOccurrence) {
       const bm25Score = bm25ScoreMap.get(contentHash);
@@ -132,19 +166,26 @@ export class SearchCoordinator {
       if (vectorScore !== undefined) {
         vectorOccurrences.push({ id: occ.id, score: vectorScore });
       }
+      const summaryScore = summaryScoreMap.get(contentHash);
+      if (summaryScore !== undefined) {
+        summaryOccurrences.push({ id: occ.id, score: summaryScore });
+      }
     }
 
     // Сортируем по score desc для правильного RRF ranking.
     bm25Occurrences.sort((a, b) => b.score - a.score);
     vectorOccurrences.sort((a, b) => b.score - a.score);
+    summaryOccurrences.sort((a, b) => b.score - a.score);
 
-    // 8. RRF fusion.
+    // 8. RRF fusion (3-way при run3Way, иначе 2-way).
     const fused = rrfFuse(
       bm25Occurrences,
       vectorOccurrences,
       this.searchConfig.rrf.k,
       this.searchConfig.bm25Weight,
       this.searchConfig.vectorWeight,
+      summaryOccurrences,
+      run3Way ? this.searchConfig.summaryVectorWeight : 0,
     );
 
     const candidates = fused.slice(0, this.searchConfig.retrieveTopK);
@@ -187,16 +228,20 @@ export class SearchCoordinator {
         scores: {
           bm25: bm25ScoreMap.get(chunk.chunk_content_hash) ?? null,
           vector: vectorScoreMap.get(chunk.chunk_content_hash) ?? null,
+          summaryVector: run3Way
+            ? summaryScoreMap.get(chunk.chunk_content_hash) ?? null
+            : null,
           rrf: rrfScoreMap.get(chunk.id) ?? 0,
           rerank: rerankScoreMap.get(chunk.id) ?? null,
         },
       });
     }
 
+    const retrievalMode = run3Way ? `${mode}+summary` : mode;
     return {
       results,
       totalCandidates: fused.length,
-      retrievalMode: mode,
+      retrievalMode,
     };
   }
 
@@ -341,6 +386,7 @@ export class SearchCoordinator {
         scores: {
           bm25: bm25ScoreMap.get(chunk.id) ?? null,
           vector: vectorScoreMap.get(chunk.id) ?? null,
+          summaryVector: null,
           rrf: rrfScoreMap.get(chunk.id) ?? 0,
           rerank: rerankScoreMap.get(chunk.id) ?? null,
         },
@@ -361,5 +407,33 @@ export class SearchCoordinator {
     this.sourceCache = new Map(sources.map((s) => [s.id, s]));
     this.sourceCacheUpdatedAt = now;
     return this.sourceCache;
+  }
+
+  // TTL-кэш для hasSummaryForViews: защищает горячий путь MCP search от лишнего SQL
+  // round-trip на каждом запросе при включённом useSummaryVector.
+  // Ключ — отсортированные sourceViewIds, объединённые `|`; разные комбинации
+  // (branch vs active) живут в независимых записях.
+  private async checkSummaryForViewsCached(sourceViewIds: string[]): Promise<boolean> {
+    if (sourceViewIds.length === 0) return false;
+
+    const key = [...sourceViewIds].sort().join('|');
+    const now = Date.now();
+    const cached = this.summaryCache.get(key);
+
+    if (cached && now - cached.at < SUMMARY_CACHE_TTL_MS) {
+      return cached.result;
+    }
+
+    const result = await this.chunkContentStorage!.hasSummaryForViews(sourceViewIds);
+    this.summaryCache.set(key, { result, at: now });
+
+    // Простая FIFO-эвикция: когда карта переполнена, удаляем самый старый ключ.
+    // Map сохраняет порядок вставки, поэтому keys().next() отдаёт самый ранний.
+    if (this.summaryCache.size > SUMMARY_CACHE_MAX_ENTRIES) {
+      const oldestKey = this.summaryCache.keys().next().value as string | undefined;
+      if (oldestKey !== undefined) this.summaryCache.delete(oldestKey);
+    }
+
+    return result;
   }
 }
