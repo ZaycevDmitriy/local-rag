@@ -10,6 +10,7 @@
 
 - **Branch-aware индексация** — независимые снимки по git-веткам с дедупликацией контента и эмбеддингов
 - **Hybrid search** — BM25 + векторный поиск (narrow/broad modes) через RRF fusion + reranker
+- **AI-powered summarization** — LLM-генерирует English-summary для чанков и включает 3-way поиск (BM25 + vec-content + vec-summary)
 - **AST-aware chunking** — tree-sitter разбивает код на семантические блоки (функции, классы, методы)
 - **MCP-сервер** — 4 инструмента для AI-агентов с поддержкой `branch` параметра для поиска по веткам
 - **Переключаемые провайдеры** — Jina, OpenAI, SiliconFlow для embeddings; Jina, SiliconFlow и `none` для rerank
@@ -58,6 +59,33 @@ rag index --all
 # Статус системы.
 rag status
 ```
+
+## AI-powered summarization
+
+Backfill LLM-summary для чанков и включение 3-way поиска:
+
+```bash
+# 1. Отметить источник как opt-in в rag.config.yaml (sources[].summarize: true).
+
+# 2. Оценить стоимость (без обращений к провайдеру).
+rag summarize --source karipos --dry-run
+
+# 3. Прогнать backfill (можно частично через --limit, идемпотентен).
+rag summarize --source karipos --limit 500
+
+# 4. Включить 3-way в rag.config.yaml: search.useSummaryVector: true.
+```
+
+Подробности в спеке [`docs/specs/ai-powered-summarization.md`](docs/specs/ai-powered-summarization.md).
+
+### Опции `rag summarize`
+
+| Опция | Описание |
+|-------|----------|
+| `--source <name>` | Имя источника (обязательно; должен иметь `summarize: true`). |
+| `--limit <N>` | Обработать не более N chunk_contents за прогон. |
+| `--dry-run` | Напечатать cost estimate и skip-rate; запросов к провайдеру нет. |
+| `--config <path>` | Альтернативный путь к `rag.config.yaml`. |
 
 ---
 
