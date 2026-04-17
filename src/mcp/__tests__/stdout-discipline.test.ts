@@ -31,7 +31,10 @@ const MCP_REACHABLE_METHODS: Array<{
 }> = [
   {
     file: 'src/storage/chunk-contents.ts',
-    methods: ['searchBm25', 'searchVector'],
+    // searchSummaryVector и hasSummaryForViews вызываются из
+    // SearchCoordinator.searchBranchAware (см. src/search/coordinator.ts),
+    // то есть исполняются на горячем пути MCP-инструмента `search`.
+    methods: ['searchBm25', 'searchVector', 'searchSummaryVector', 'hasSummaryForViews'],
   },
   {
     file: 'src/storage/chunks.ts',

@@ -190,7 +190,11 @@ describe('processSummarizeBatch', () => {
     }
   });
 
-  it('смешанный батч: skipped + ok + failed в правильных группах', async () => {
+  // Regression: смешанный батч раньше делал 3 отдельных вызова updateSummaryWithEmbedding
+  // (skipped → failed → ok), что нарушало правило skill-context «Atomicity red flag»:
+  // крэш между вызовами мог оставить «частично обработанный» батч. Теперь все три группы
+  // собираются в один upload-буфер и пишутся одной транзакцией.
+  it('смешанный батч: skipped + ok + failed пишутся ОДНИМ вызовом updateSummaryWithEmbedding', async () => {
     const summarizer: Summarizer = {
       summarize: vi.fn()
         .mockResolvedValueOnce({ summary: 'Good summary' }) // h-ok
@@ -217,11 +221,12 @@ describe('processSummarizeBatch', () => {
     expect(result).toEqual({ summarized: 1, skipped: 1, failed: 1 });
     expect(summarizer.summarize).toHaveBeenCalledTimes(2); // Только для ok+fail.
 
-    // Три отдельных вызова: skipped, failed, ok.
-    expect(updateSummaryWithEmbedding).toHaveBeenCalledTimes(3);
+    // Один вызов на весь смешанный батч — атомарность.
+    expect(updateSummaryWithEmbedding).toHaveBeenCalledTimes(1);
+    expect(captured).toHaveLength(1);
+    expect(captured[0]).toHaveLength(3);
 
-    const allWrites = captured.flat();
-    const byHash = new Map(allWrites.map((w) => [w.contentHash, w]));
+    const byHash = new Map(captured[0]!.map((w) => [w.contentHash, w]));
 
     expect(byHash.get('h-skip')).toEqual({
       contentHash: 'h-skip',

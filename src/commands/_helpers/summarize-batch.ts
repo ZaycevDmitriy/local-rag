@@ -21,12 +21,16 @@ export interface SummarizeBatchResult {
 }
 
 // Обрабатывает один батч кандидатов:
-// 1. Разделяет skip vs summarize через gates.
-// 2. Skipped пишет плейсхолдером `[skipped:<reason>]` с embedding=NULL.
-// 3. Запускает LLM параллельно с заданной concurrency.
-// 4. Failed пишет плейсхолдером `[failed:<reason>]` с embedding=NULL — ключевой инвариант,
-//    без которого loop ретраил бы persistent failures до исчерпания maxToProcess и жёг токены.
-// 5. Ok-результаты пишет атомарно (summary + summary_embedding в одной транзакции).
+// 1. Разделяет skip vs summarize через gates (skipped собирает в общий upload-буфер).
+// 2. Запускает LLM параллельно с заданной concurrency для не-skip кандидатов.
+// 3. Failed помечает плейсхолдером `[failed:<reason>]` с embedding=NULL — ключевой инвариант,
+//    без которого внешний while-loop ретраил бы persistent failures до исчерпания maxToProcess
+//    и жёг токены.
+// 4. Ok-результаты эмбеддит батчем и добавляет в общий upload-буфер.
+// 5. Всё вместе (skipped + failed + ok) пишет одним вызовом storage.updateSummaryWithEmbedding,
+//    который внутри открывает одну транзакцию на BATCH_SIZE (100) строк. Одна транзакция
+//    на батч — защита от «частично обработанного» состояния при крэше процесса между
+//    разнесёнными записями. Regression-тест: «смешанный батч → один вызов» в summarize-batch.test.ts.
 export async function processSummarizeBatch(args: {
   candidates: SummarizeCandidate[];
   summarizer: Summarizer;
@@ -36,23 +40,25 @@ export async function processSummarizeBatch(args: {
 }): Promise<SummarizeBatchResult> {
   const { candidates, summarizer, embedder, storage, concurrency } = args;
 
-  let summarized = 0;
-  let skipped = 0;
-  let failed = 0;
-
-  // Разделяем skip vs summarize.
-  const skippedUpdates: Array<{
+  // Общий upload-буфер: skipped + failed + ok накапливаются сюда
+  // и записываются одним вызовом updateSummaryWithEmbedding в конце.
+  const updates: Array<{
     contentHash: string;
     summary: string;
     embedding: number[] | null;
   }> = [];
-  const toSummarize: SummarizeCandidate[] = [];
 
+  let summarized = 0;
+  let skipped = 0;
+  let failed = 0;
+
+  // Gate 1/2: skipped → плейсхолдер `[skipped:<reason>]`, embedding=NULL.
+  const toSummarize: SummarizeCandidate[] = [];
   for (const candidate of candidates) {
     const gate = shouldSummarize(candidate.input);
     if (gate.skip) {
       skipped++;
-      skippedUpdates.push({
+      updates.push({
         contentHash: candidate.contentHash,
         summary: `[skipped:${gate.reason ?? 'gate'}]`,
         embedding: null,
@@ -62,11 +68,7 @@ export async function processSummarizeBatch(args: {
     }
   }
 
-  if (skippedUpdates.length > 0) {
-    await storage.updateSummaryWithEmbedding(skippedUpdates);
-  }
-
-  // Параллельные LLM-вызовы.
+  // Параллельные LLM-вызовы (ошибки провайдера попадают в result.summary === null).
   const llmResults = await pMap(
     toSummarize,
     async (c) => ({
@@ -81,33 +83,43 @@ export async function processSummarizeBatch(args: {
   failed = failedResults.length;
 
   // [FIX] Failed → плейсхолдер, чтобы не перевыбираться на следующей итерации.
-  if (failedResults.length > 0) {
-    const failedUpdates = failedResults.map((r) => ({
+  for (const r of failedResults) {
+    updates.push({
       contentHash: r.hash,
       summary: `[failed:${r.result.reason ?? 'unknown'}]`,
       embedding: null,
-    }));
+    });
+  }
+  if (failed > 0) {
     console.error(
-      `[FIX] marking ${failedUpdates.length} failed rows with [failed:*] placeholder ` +
+      `[FIX] marking ${failed} failed rows with [failed:*] placeholder ` +
       'to prevent infinite retry loop',
     );
-    await storage.updateSummaryWithEmbedding(failedUpdates);
   }
 
-  // Ok → атомарная запись summary + summary_embedding.
+  // Ok → эмбеддинг батчем + дописка в upload-буфер.
   if (okResults.length > 0) {
     const texts = okResults.map((r) => r.result.summary!);
     const embeddings = await embedder.embedBatch(texts);
-
-    await storage.updateSummaryWithEmbedding(
-      okResults.map((r, i) => ({
-        contentHash: r.hash,
-        summary: r.result.summary!,
+    for (let i = 0; i < okResults.length; i++) {
+      updates.push({
+        contentHash: okResults[i]!.hash,
+        summary: okResults[i]!.result.summary!,
         embedding: embeddings[i]!,
-      })),
-    );
-
+      });
+    }
     summarized = okResults.length;
+  }
+
+  // Единый вызов: skipped + failed + ok записываются одним storage-вызовом.
+  // updateSummaryWithEmbedding внутри открывает одну транзакцию на BATCH_SIZE (100) строк,
+  // поэтому для типичного rag summarize батча 50 получаем ровно одну транзакцию.
+  if (updates.length > 0) {
+    console.error(
+      '[FIX] processSummarizeBatch: single updateSummaryWithEmbedding call for ' +
+      `${updates.length} rows (ok=${summarized}, skipped=${skipped}, failed=${failed})`,
+    );
+    await storage.updateSummaryWithEmbedding(updates);
   }
 
   return { summarized, skipped, failed };
