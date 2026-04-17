@@ -13,6 +13,8 @@ export {
   JinaRerankerSchema,
   SiliconFlowRerankerSchema,
   RrfConfigSchema,
+  SummarizationConfigSchema,
+  SummarizationCostSchema,
 } from './schema.js';
 
 export type {
@@ -29,6 +31,8 @@ export type {
   JinaRerankerConfig,
   SiliconFlowRerankerConfig,
   RrfConfig,
+  SummarizationConfig,
+  SummarizationCostConfig,
 } from './schema.js';
 
 export { defaultConfig } from './defaults.js';

@@ -59,10 +59,13 @@ export interface IndexedFileRow {
 }
 
 // Строка таблицы chunk_contents — дедуплицированное содержимое чанка с embedding.
+// Поля summary и summary_embedding добавлены миграцией 006 (опциональны, могут быть NULL).
 export interface ChunkContentRow {
   content_hash: string;
   content: string;
   embedding: number[] | null;
+  summary: string | null;
+  summary_embedding: number[] | null;
   created_at: Date;
 }
 

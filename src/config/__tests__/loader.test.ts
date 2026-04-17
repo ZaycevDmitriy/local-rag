@@ -208,6 +208,73 @@ describe('AppConfigSchema', () => {
     expect(config.reranker.siliconflow?.topK).toBe(5);
     expect(config.indexing.strictAst).toBe(true);
   });
+
+  it('дефолты summarization и 3-way search устанавливаются корректно', () => {
+    const config = AppConfigSchema.parse({});
+
+    expect(config.search.summaryVectorWeight).toBe(0.0);
+    expect(config.search.useSummaryVector).toBe(false);
+    expect(config.summarization.provider).toBe('siliconflow');
+    expect(config.summarization.model).toBe('Qwen/Qwen2.5-7B-Instruct');
+    expect(config.summarization.concurrency).toBe(4);
+    expect(config.summarization.timeoutMs).toBe(60_000);
+    expect(config.summarization.cost.dryRunRequired).toBe(true);
+  });
+
+  it('принимает сбалансированные веса при useSummaryVector=true', () => {
+    const config = AppConfigSchema.parse({
+      search: {
+        bm25Weight: 0.2,
+        vectorWeight: 0.5,
+        summaryVectorWeight: 0.3,
+        useSummaryVector: true,
+      },
+    });
+
+    expect(config.search.useSummaryVector).toBe(true);
+    expect(config.search.summaryVectorWeight).toBeCloseTo(0.3);
+  });
+
+  it('бросает Zod ошибку при useSummaryVector=true и сумме весов вне допуска', () => {
+    expect(() => {
+      AppConfigSchema.parse({
+        search: {
+          bm25Weight: 0.3,
+          vectorWeight: 0.7,
+          summaryVectorWeight: 0.3,
+          useSummaryVector: true,
+        },
+      });
+    }).toThrow(/сумма весов/);
+  });
+
+  it('не валидирует сумму весов при useSummaryVector=false', () => {
+    const config = AppConfigSchema.parse({
+      search: {
+        bm25Weight: 0.3,
+        vectorWeight: 0.7,
+        summaryVectorWeight: 5.0,
+        useSummaryVector: false,
+      },
+    });
+
+    expect(config.search.summaryVectorWeight).toBe(5.0);
+  });
+
+  it('парсит summarize: true на источнике', () => {
+    const config = AppConfigSchema.parse({
+      sources: [
+        {
+          name: 'my-project',
+          type: 'local',
+          path: '/home/user/project',
+          summarize: true,
+        },
+      ],
+    });
+
+    expect(config.sources[0]!.summarize).toBe(true);
+  });
 });
 
 // --- loadConfig ---

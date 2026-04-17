@@ -28,15 +28,28 @@ reranker:
 search:
   bm25Weight: 0.4                   # Вес BM25 в RRF
   vectorWeight: 0.6                 # Вес векторного поиска
+  summaryVectorWeight: 0.0          # Вес vec-summary (только при useSummaryVector)
   retrieveTopK: 50                  # Сколько результатов брать из каждого канала
   finalTopK: 10                     # Финальное количество результатов
   rrf:
     k: 60                           # Параметр RRF fusion
+  useSummaryVector: false           # Включить 3-way поиск (BM25 + vec-content + vec-summary)
+
+# LLM-генерация описаний чанков (AI-powered summarization). Запускается командой `rag summarize`.
+summarization:
+  provider: siliconflow             # siliconflow | mock
+  model: Qwen/Qwen2.5-7B-Instruct
+  apiKey: ${SILICONFLOW_API_KEY}    # опционально, дефолтом тот же ключ, что у embeddings
+  concurrency: 4                    # Параллельность вызовов LLM
+  timeoutMs: 60000                  # HTTP timeout per request
+  cost:
+    dryRunRequired: true            # Требовать `rag summarize --dry-run` до первого прогона
 
 sources:
   - name: my-project
     type: local
     path: /path/to/project
+    summarize: true                 # Opt-in: разрешить `rag summarize` для этого источника
     include: ['**/*.ts', '**/*.md']
     exclude: ['**/node_modules/**', '**/dist/**']
 
