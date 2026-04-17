@@ -12,7 +12,7 @@ import {
 import { createTextEmbedder } from '../embeddings/index.js';
 import { createSummarizer, shouldSummarize } from '../summarize/index.js';
 import type { SummarizerInput } from '../summarize/index.js';
-import { pMap } from '../utils/index.js';
+import { processSummarizeBatch } from './_helpers/summarize-batch.js';
 
 // Размер пачки выборки chunk_contents из БД.
 const FETCH_BATCH_SIZE = 50;
@@ -177,57 +177,22 @@ export const summarizeCommand = new Command('summarize')
             break;
           }
 
-          // Разделяем skip vs summarize.
-          const toSummarize: Array<{ hash: string; input: SummarizerInput }> = [];
-          for (const row of rows) {
-            const input = toSummarizerInput(row as SummarizeCandidate);
-            const gate = shouldSummarize(input);
-            if (gate.skip) {
-              skippedCount++;
-              // Для skipped записываем плейсхолдер "skipped:<reason>" чтобы не выбирать их повторно.
-              await chunkContentStorage.updateSummaries([{
-                contentHash: row.content_hash,
-                summary: `[skipped:${gate.reason ?? 'gate'}]`,
-              }]);
-            } else {
-              toSummarize.push({ hash: row.content_hash, input });
-            }
-          }
+          const candidates = rows.map((row) => ({
+            contentHash: row.content_hash,
+            input: toSummarizerInput(row as SummarizeCandidate),
+          }));
 
-          // Параллельные LLM-вызовы.
-          const llmResults = await pMap(
-            toSummarize,
-            async (item) => ({
-              hash: item.hash,
-              result: await summarizer.summarize(item.input),
-            }),
+          const batchResult = await processSummarizeBatch({
+            candidates,
+            summarizer,
+            embedder,
+            storage: chunkContentStorage,
             concurrency,
-          );
+          });
 
-          const okResults = llmResults.filter((r) => r.result.summary !== null);
-          const failedResults = llmResults.filter((r) => r.result.summary === null);
-          failedCount += failedResults.length;
-
-          if (okResults.length > 0) {
-            await chunkContentStorage.updateSummaries(
-              okResults.map((r) => ({
-                contentHash: r.hash,
-                summary: r.result.summary!,
-              })),
-            );
-
-            // Эмбеддинги для summary (batch).
-            const texts = okResults.map((r) => r.result.summary!);
-            const embeddings = await embedder.embedBatch(texts);
-            await chunkContentStorage.updateSummaryEmbeddings(
-              okResults.map((r, i) => ({
-                contentHash: r.hash,
-                embedding: embeddings[i]!,
-              })),
-            );
-
-            summarized += okResults.length;
-          }
+          summarized += batchResult.summarized;
+          skippedCount += batchResult.skipped;
+          failedCount += batchResult.failed;
 
           processed += rows.length;
           console.log(

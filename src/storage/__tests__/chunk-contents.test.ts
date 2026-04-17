@@ -173,31 +173,66 @@ describe('ChunkContentStorage', () => {
       expect(n).toBe(42);
     });
 
-    it('updateSummaries не вызывает begin на пустом массиве', async () => {
-      await storage.updateSummaries([]);
+    it('updateSummaryWithEmbedding не вызывает begin на пустом массиве', async () => {
+      await storage.updateSummaryWithEmbedding([]);
       expect(sql.begin).not.toHaveBeenCalled();
     });
 
-    it('updateSummaries открывает транзакцию и UPDATE через tx.unsafe', async () => {
-      await storage.updateSummaries([
-        { contentHash: 'h1', summary: 'sum 1' },
-        { contentHash: 'h2', summary: 'sum 2' },
+    it('updateSummaryWithEmbedding открывает одну транзакцию на батч', async () => {
+      await storage.updateSummaryWithEmbedding([
+        { contentHash: 'h1', summary: 'sum 1', embedding: [0.1, 0.2] },
+        { contentHash: 'h2', summary: 'sum 2', embedding: [0.3, 0.4] },
       ]);
 
       expect(sql.begin).toHaveBeenCalledTimes(1);
     });
 
-    it('updateSummaryEmbeddings не вызывает begin на пустом массиве', async () => {
-      await storage.updateSummaryEmbeddings([]);
-      expect(sql.begin).not.toHaveBeenCalled();
-    });
+    it('updateSummaryWithEmbedding пишет NULL embedding для плейсхолдеров', async () => {
+      // Проверяем, что при embedding=null второй параметр UPDATE — null,
+      // а не SQL-строка от pgvector.toSql.
+      let capturedParams: unknown[] = [];
+      const beginFn = (sql as unknown as { begin: ReturnType<typeof vi.fn> }).begin;
+      beginFn.mockImplementationOnce(async (cb: (tx: unknown) => Promise<void>) => {
+        const tx = {
+          unsafe: vi.fn().mockImplementation((_sql: string, params: unknown[]) => {
+            capturedParams = params;
+            return Promise.resolve([]);
+          }),
+        };
+        return cb(tx);
+      });
 
-    it('updateSummaryEmbeddings вызывает begin для батча', async () => {
-      await storage.updateSummaryEmbeddings([
-        { contentHash: 'h1', embedding: [0.1, 0.2] },
+      await storage.updateSummaryWithEmbedding([
+        { contentHash: 'h-skipped', summary: '[skipped:content<200]', embedding: null },
       ]);
 
-      expect(sql.begin).toHaveBeenCalledTimes(1);
+      expect(capturedParams[0]).toBe('[skipped:content<200]');
+      expect(capturedParams[1]).toBeNull();
+      expect(capturedParams[2]).toBe('h-skipped');
+    });
+
+    it('updateSummaryWithEmbedding пишет vector-строку для okResults', async () => {
+      let capturedParams: unknown[] = [];
+      const beginFn = (sql as unknown as { begin: ReturnType<typeof vi.fn> }).begin;
+      beginFn.mockImplementationOnce(async (cb: (tx: unknown) => Promise<void>) => {
+        const tx = {
+          unsafe: vi.fn().mockImplementation((_sql: string, params: unknown[]) => {
+            capturedParams = params;
+            return Promise.resolve([]);
+          }),
+        };
+        return cb(tx);
+      });
+
+      await storage.updateSummaryWithEmbedding([
+        { contentHash: 'h-ok', summary: 'real summary', embedding: [0.1, 0.2] },
+      ]);
+
+      expect(capturedParams[0]).toBe('real summary');
+      // pgvector.toSql сериализует как '[0.1,0.2]'.
+      expect(typeof capturedParams[1]).toBe('string');
+      expect(capturedParams[1]).toMatch(/^\[/);
+      expect(capturedParams[2]).toBe('h-ok');
     });
   });
 

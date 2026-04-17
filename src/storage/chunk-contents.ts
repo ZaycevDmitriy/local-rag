@@ -152,46 +152,30 @@ export class ChunkContentStorage {
     return Number(rows[0]?.count ?? 0);
   }
 
-  // Обновляет summary пачками (транзакция на batch). Принимает rows с contentHash → summary.
-  async updateSummaries(
-    updates: Array<{ contentHash: string; summary: string }>,
+  // Атомарно обновляет summary и summary_embedding одним UPDATE per-row внутри транзакции-батча.
+  // embedding: null пишет SQL NULL — для плейсхолдеров `[skipped:...]` и `[failed:...]`,
+  // которые не должны попадать в 3-way поиск и перевыбираться на следующем прогоне.
+  // Атомарность гарантирует, что после падения процесса в БД не останется строк с
+  // summary != NULL и summary_embedding = NULL (раньше это было отдельными транзакциями).
+  async updateSummaryWithEmbedding(
+    updates: Array<{ contentHash: string; summary: string; embedding: number[] | null }>,
   ): Promise<void> {
     if (updates.length === 0) return;
 
-    console.error(`[ChunkContentStorage] updateSummaries: count=${updates.length}`);
+    console.error(`[ChunkContentStorage] updateSummaryWithEmbedding: count=${updates.length}`);
 
     for (let i = 0; i < updates.length; i += BATCH_SIZE) {
       const batch = updates.slice(i, i + BATCH_SIZE);
 
       await this.sql.begin(async (tx) => {
         for (const update of batch) {
-          await tx.unsafe(
-            'UPDATE chunk_contents SET summary = $1 WHERE content_hash = $2',
-            [update.summary, update.contentHash],
-          );
-        }
-      });
-    }
-  }
-
-  // Обновляет summary_embedding пачками (транзакция на batch).
-  async updateSummaryEmbeddings(
-    updates: Array<{ contentHash: string; embedding: number[] }>,
-  ): Promise<void> {
-    if (updates.length === 0) return;
-
-    console.error(`[ChunkContentStorage] updateSummaryEmbeddings: count=${updates.length}`);
-
-    for (let i = 0; i < updates.length; i += BATCH_SIZE) {
-      const batch = updates.slice(i, i + BATCH_SIZE);
-
-      await this.sql.begin(async (tx) => {
-        for (const update of batch) {
-          const vectorStr = pgvector.toSql(update.embedding) as string;
+          const vectorStr = update.embedding === null
+            ? null
+            : (pgvector.toSql(update.embedding) as string);
 
           await tx.unsafe(
-            'UPDATE chunk_contents SET summary_embedding = $1::vector WHERE content_hash = $2',
-            [vectorStr, update.contentHash],
+            'UPDATE chunk_contents SET summary = $1, summary_embedding = $2::vector WHERE content_hash = $3',
+            [update.summary, vectorStr, update.contentHash],
           );
         }
       });
