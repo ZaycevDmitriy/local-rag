@@ -9,10 +9,10 @@ export function createBranchViewsRebuildMigration(dimensions: number): Migration
     name: '005_branch_views_rebuild',
 
     async up(sql) {
-      console.log('[migration:005] Начало destructive cutover — branch-aware schema...');
+      console.error('[migration:005] Начало destructive cutover — branch-aware schema...');
 
       // --- DROP существующих таблиц (порядок: дети → родители). ---
-      console.log('[migration:005] Удаление старых таблиц...');
+      console.error('[migration:005] Удаление старых таблиц...');
       await sql`DROP TABLE IF EXISTS chunks CASCADE`;
       await sql`DROP TABLE IF EXISTS indexed_files CASCADE`;
       await sql`DROP TABLE IF EXISTS sources CASCADE`;
@@ -20,7 +20,7 @@ export function createBranchViewsRebuildMigration(dimensions: number): Migration
       // --- Создание таблиц (порядок: родители → дети). ---
 
       // 1. sources — логический источник данных.
-      console.log('[migration:005] Создание таблицы sources...');
+      console.error('[migration:005] Создание таблицы sources...');
       await sql`
         CREATE TABLE sources (
           id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -39,7 +39,7 @@ export function createBranchViewsRebuildMigration(dimensions: number): Migration
       `;
 
       // 2. source_views — материализованный snapshot (branch/detached/workspace).
-      console.log('[migration:005] Создание таблицы source_views...');
+      console.error('[migration:005] Создание таблицы source_views...');
       await sql`
         CREATE TABLE source_views (
           id                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -79,7 +79,7 @@ export function createBranchViewsRebuildMigration(dimensions: number): Migration
       `;
 
       // 3. file_blobs — дедуплицированные тела файлов для snapshot-based read_source.
-      console.log('[migration:005] Создание таблицы file_blobs...');
+      console.error('[migration:005] Создание таблицы file_blobs...');
       await sql`
         CREATE TABLE file_blobs (
           content_hash  TEXT PRIMARY KEY,
@@ -90,7 +90,7 @@ export function createBranchViewsRebuildMigration(dimensions: number): Migration
       `;
 
       // 4. indexed_files — файлы, проиндексированные в рамках конкретного view.
-      console.log('[migration:005] Создание таблицы indexed_files...');
+      console.error('[migration:005] Создание таблицы indexed_files...');
       await sql`
         CREATE TABLE indexed_files (
           id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -106,7 +106,7 @@ export function createBranchViewsRebuildMigration(dimensions: number): Migration
       await sql`CREATE UNIQUE INDEX idx_indexed_files_view_id ON indexed_files(source_view_id, id)`;
 
       // 5. chunk_contents — дедуплицированное содержимое чанков с embedding и search_vector.
-      console.log('[migration:005] Создание таблицы chunk_contents...');
+      console.error('[migration:005] Создание таблицы chunk_contents...');
       await sql`
         CREATE TABLE chunk_contents (
           content_hash    TEXT PRIMARY KEY,
@@ -127,7 +127,7 @@ export function createBranchViewsRebuildMigration(dimensions: number): Migration
       await sql`CREATE INDEX idx_chunk_contents_fts ON chunk_contents USING GIN (search_vector)`;
 
       // 6. chunks — occurrence-level строки, привязанные к view и файлу.
-      console.log('[migration:005] Создание таблицы chunks...');
+      console.error('[migration:005] Создание таблицы chunks...');
       await sql`
         CREATE TABLE chunks (
           id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -162,7 +162,7 @@ export function createBranchViewsRebuildMigration(dimensions: number): Migration
       await sql`CREATE INDEX idx_chunks_indexed_file ON chunks(indexed_file_id)`;
       await sql`CREATE INDEX idx_chunks_path ON chunks(source_view_id, path)`;
 
-      console.log('[migration:005] Destructive cutover завершён. Требуется полная переиндексация.');
+      console.error('[migration:005] Destructive cutover завершён. Требуется полная переиндексация.');
     },
   };
 }

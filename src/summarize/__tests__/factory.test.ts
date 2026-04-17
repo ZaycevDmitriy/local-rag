@@ -31,7 +31,11 @@ function makeAppConfig(overrides: Partial<AppConfig['summarization']> = {}): App
       model: 'Qwen/Qwen2.5-7B-Instruct',
       concurrency: 4,
       timeoutMs: 60_000,
-      cost: { dryRunRequired: true },
+      cost: {
+        dryRunRequired: true,
+        avgTokensPerChunk: 200,
+        pricePerTokenUsd: 0.05 / 1_000_000,
+      },
       ...overrides,
     },
     sources: [],

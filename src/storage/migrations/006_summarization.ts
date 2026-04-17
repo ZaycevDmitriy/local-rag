@@ -10,7 +10,7 @@ export function createSummarizationMigration(dimensions: number): Migration {
     name: '006_summarization',
 
     async up(sql) {
-      console.log('[migration:006] Добавление колонок summary и summary_embedding в chunk_contents...');
+      console.error('[migration:006] Добавление колонок summary и summary_embedding в chunk_contents...');
 
       // Колонка summary — free-form текст от LLM, NULL = не сгенерирован.
       await sql`
@@ -27,7 +27,7 @@ export function createSummarizationMigration(dimensions: number): Migration {
 
       // Partial HNSW индекс: строится только по non-NULL summary_embedding.
       // Без WHERE пустая таблица с NULL-векторами сломает HNSW.
-      console.log('[migration:006] Создание partial HNSW индекса по summary_embedding...');
+      console.error('[migration:006] Создание partial HNSW индекса по summary_embedding...');
       await sql`
         CREATE INDEX IF NOT EXISTS idx_chunk_contents_summary_embedding
           ON chunk_contents
@@ -36,7 +36,7 @@ export function createSummarizationMigration(dimensions: number): Migration {
           WHERE summary_embedding IS NOT NULL
       `;
 
-      console.log('[migration:006] Миграция 006 завершена.');
+      console.error('[migration:006] Миграция 006 завершена.');
     },
   };
 }

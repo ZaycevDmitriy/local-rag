@@ -34,6 +34,8 @@ export const defaultConfig: AppConfig = {
     timeoutMs: 60_000,
     cost: {
       dryRunRequired: true,
+      avgTokensPerChunk: 200,
+      pricePerTokenUsd: 0.05 / 1_000_000,
     },
   },
   sources: [],

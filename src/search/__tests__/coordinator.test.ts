@@ -517,4 +517,47 @@ describe('SearchCoordinator — 3-way search with summary vector', () => {
     expect(response.results).toHaveLength(1);
     expect(response.results[0]!.scores.summaryVector).toBe(0.85);
   });
+
+  // Кэш hasSummaryForViews: защищает горячий путь MCP search от лишнего SQL per-request.
+  it('кэширует результат hasSummaryForViews для одинакового набора views', async () => {
+    const mocks = build3WayMocks();
+    const hasSummaryMock = vi.mocked(
+      mocks.chunkContentStorage!.hasSummaryForViews as unknown as ReturnType<typeof vi.fn>,
+    );
+    hasSummaryMock.mockResolvedValue(true);
+    const coordinator = build3WayCoordinator(mocks, true);
+
+    await coordinator.search({ query: 'q1' });
+    await coordinator.search({ query: 'q2' });
+    await coordinator.search({ query: 'q3' });
+
+    // Несмотря на 3 вызова search, SQL сделан однажды (одинаковые sourceViewIds).
+    expect(hasSummaryMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('порядок sourceViewIds не влияет на ключ кэша', async () => {
+    const mocks = build3WayMocks();
+    const hasSummaryMock = vi.mocked(
+      mocks.chunkContentStorage!.hasSummaryForViews as unknown as ReturnType<typeof vi.fn>,
+    );
+    hasSummaryMock.mockResolvedValue(true);
+
+    // Возвращаем views в разном порядке, но это тот же набор.
+    vi.mocked(mocks.sourceStorage.getAll)
+      .mockResolvedValueOnce([
+        makeSource({ id: 'src-a', active_view_id: 'view-a' }),
+        makeSource({ id: 'src-b', active_view_id: 'view-b' }),
+      ])
+      .mockResolvedValueOnce([
+        makeSource({ id: 'src-b', active_view_id: 'view-b' }),
+        makeSource({ id: 'src-a', active_view_id: 'view-a' }),
+      ]);
+
+    const coordinator = build3WayCoordinator(mocks, true);
+    await coordinator.search({ query: 'q1' });
+    await coordinator.search({ query: 'q2' });
+
+    // Сортировка ключей должна дать один и тот же кэш-хит.
+    expect(hasSummaryMock).toHaveBeenCalledTimes(1);
+  });
 });

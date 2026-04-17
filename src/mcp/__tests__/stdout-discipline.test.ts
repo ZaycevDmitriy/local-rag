@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
@@ -14,6 +14,11 @@ const REPO_ROOT = resolve(CURRENT_DIR, '..', '..', '..');
 // Файлы, которые исполняются при обработке MCP-tool вызовов
 // (search / read_source / list_sources / status). Для них console.log
 // категорически запрещён на любых путях — иначе ломается JSON-RPC.
+// chunk-contents.ts находится здесь целиком: часть методов MCP-reachable
+// (searchBm25/searchVector/searchSummaryVector/hasSummaryForViews на горячем пути
+// SearchCoordinator.searchBranchAware), а остальные методы (insertBatch,
+// updateEmbeddings, deleteOrphans) унифицированы под ту же дисциплину, чтобы
+// случайный future-caller из MCP-пути не сломал JSON-RPC.
 const MCP_REACHABLE_FILES = [
   'src/embeddings/openai.ts',
   'src/search/coordinator.ts',
@@ -21,6 +26,7 @@ const MCP_REACHABLE_FILES = [
   'src/mcp/tools/search.ts',
   'src/mcp/tools/list-sources.ts',
   'src/mcp/tools/status.ts',
+  'src/storage/chunk-contents.ts',
 ];
 
 // Shared-файлы (CLI + MCP). console.log запрещён в конкретных
@@ -29,13 +35,6 @@ const MCP_REACHABLE_METHODS: Array<{
   file: string;
   methods: string[];
 }> = [
-  {
-    file: 'src/storage/chunk-contents.ts',
-    // searchSummaryVector и hasSummaryForViews вызываются из
-    // SearchCoordinator.searchBranchAware (см. src/search/coordinator.ts),
-    // то есть исполняются на горячем пути MCP-инструмента `search`.
-    methods: ['searchBm25', 'searchVector', 'searchSummaryVector', 'hasSummaryForViews'],
-  },
   {
     file: 'src/storage/chunks.ts',
     methods: ['getContentHashes', 'resolveOccurrences'],
@@ -99,4 +98,24 @@ describe('MCP stdout discipline', () => {
       });
     }
   }
+
+  // Миграции — CLI-only путь (`rag init`), но тот же принцип stdout-дисциплины:
+  // при запуске инициализации из orchestrator'а stdout не должен забиваться
+  // информационными сообщениями. Regression-guard на случай будущих миграций.
+  describe('storage/migrations: вспомогательные логи через stderr', () => {
+    const migrationsDir = resolve(REPO_ROOT, 'src/storage/migrations');
+    const migrationFiles = readdirSync(migrationsDir)
+      .filter((name) => /^\d{3}_.+\.ts$/.test(name));
+
+    for (const name of migrationFiles) {
+      it(`${name} не содержит console.log`, () => {
+        const content = readRepoFile(`src/storage/migrations/${name}`);
+        const matches = content.match(/console\.log\s*\(/g) ?? [];
+        expect(
+          matches,
+          `console.log найден в миграции ${name}: используйте console.error`,
+        ).toHaveLength(0);
+      });
+    }
+  });
 });

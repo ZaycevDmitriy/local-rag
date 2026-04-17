@@ -1,5 +1,6 @@
 // Команда rag summarize — backfill LLM-summary для chunk_contents.
 // Opt-in per source (sources[].summarize: true).
+// Адаптер: парсит опции, резолвит зависимости, делегирует прогон helper'ам.
 // --dry-run обязательно печатает cost estimate и не шлёт запросы к провайдеру.
 import { Command } from 'commander';
 import { loadConfig } from '../config/index.js';
@@ -10,57 +11,19 @@ import {
   ChunkContentStorage,
 } from '../storage/index.js';
 import { createTextEmbedder } from '../embeddings/index.js';
-import { createSummarizer, shouldSummarize } from '../summarize/index.js';
-import type { SummarizerInput } from '../summarize/index.js';
-import { processSummarizeBatch } from './_helpers/summarize-batch.js';
+import { createSummarizer } from '../summarize/index.js';
+import { estimateDryRun, formatCost } from './_helpers/summarize-dry-run.js';
+import { runSummarizeLoop } from './_helpers/summarize-run.js';
+import { toSummarizerInput, type SummarizeCandidateRow } from './_helpers/summarize-input.js';
 
 // Размер пачки выборки chunk_contents из БД.
 const FETCH_BATCH_SIZE = 50;
 
-// Средняя длина контента в токенах (грубая оценка, согласована с планом T07).
-const AVG_TOKENS_PER_CHUNK = 200;
-
-// Цена за токен Qwen2.5-7B на SiliconFlow ($0.05 / 1M токенов).
-const PRICE_PER_TOKEN = 0.05 / 1_000_000;
-
-interface SummarizeCandidate {
-  content_hash: string;
-  content: string;
-  path: string;
-  source_type: string;
-  language: string | null;
-  metadata: Record<string, unknown>;
-}
-
-// Простая эвристика: определяет наличие JSDoc/JavaDoc/Kotlin-doc в начале содержимого.
-function detectDocstring(content: string): boolean {
-  const head = content.slice(0, 256);
-  return head.includes('/**') || head.includes('/*!') || head.includes('"""');
-}
-
-// Собирает SummarizerInput из строки БД.
-function toSummarizerInput(row: SummarizeCandidate): SummarizerInput {
-  const meta = row.metadata;
-  const fqn = typeof meta.fqn === 'string' ? meta.fqn : undefined;
-  const fragmentType = typeof meta.fragmentType === 'string'
-    ? meta.fragmentType
-    : row.source_type;
-
-  return {
-    path: row.path,
-    kind: fragmentType,
-    fqn,
-    language: row.language ?? undefined,
-    hasDocstring: detectDocstring(row.content),
-    content: row.content,
-  };
-}
-
-// Человеческий формат цены.
-function formatCost(cost: number): string {
-  if (cost < 0.01) return `$${(cost * 1000).toFixed(2)}m`; // миллидоллары
-  return `$${cost.toFixed(3)}`;
-}
+// Максимум выборки для оценки dry-run skip-rate.
+// SHA-256 распределён равномерно, поэтому первые 500 записей по лексикографическому
+// порядку хэша — репрезентативная выборка, а не смещённая. Это осознанный выбор
+// вместо `ORDER BY RANDOM()`: одинаковый dry-run между прогонами и в CI.
+const DRY_RUN_SAMPLE_LIMIT = 500;
 
 export const summarizeCommand = new Command('summarize')
   .description('Backfill LLM summaries for chunk_contents (opt-in per source)')
@@ -109,7 +72,6 @@ export const summarizeCommand = new Command('summarize')
           process.exit(1);
         }
 
-        // Подсчёт кандидатов.
         const totalCandidates = await chunkContentStorage
           .countWithNullSummaryForSource(source.id);
 
@@ -121,36 +83,33 @@ export const summarizeCommand = new Command('summarize')
           return;
         }
 
-        // Dry-run: оцениваем стоимость и пропуск через gates (на выборке до 500).
-        // Sample детерминирован: getWithNullSummaryForSource сортирует по content_hash.
-        // SHA-256 распределён равномерно, поэтому первые 500 записей по лексикографическому
-        // порядку хэша — репрезентативная выборка, а не смещённая. Это осознанный выбор
-        // вместо `ORDER BY RANDOM()`: одинаковый dry-run между прогонами и в CI.
         if (options.dryRun) {
-          const sampleSize = Math.min(500, totalCandidates);
-          const sample = await chunkContentStorage.getWithNullSummaryForSource(
+          const sampleSize = Math.min(DRY_RUN_SAMPLE_LIMIT, totalCandidates);
+          const rows = await chunkContentStorage.getWithNullSummaryForSource(
             source.id,
             sampleSize,
           );
 
-          let skipped = 0;
-          for (const row of sample) {
-            const input = toSummarizerInput(row as SummarizeCandidate);
-            if (shouldSummarize(input).skip) skipped++;
-          }
-
-          const skipRate = sample.length === 0 ? 0 : skipped / sample.length;
-          const expectedSummarize = Math.round(totalCandidates * (1 - skipRate));
-          const estimatedTokens = expectedSummarize * AVG_TOKENS_PER_CHUNK;
-          const estimatedCost = estimatedTokens * PRICE_PER_TOKEN;
+          const sample = rows.map((row) => toSummarizerInput(row as SummarizeCandidateRow));
+          const estimate = estimateDryRun({
+            sample,
+            totalCandidates,
+            avgTokensPerChunk: appConfig.summarization.cost.avgTokensPerChunk,
+            pricePerTokenUsd: appConfig.summarization.cost.pricePerTokenUsd,
+          });
 
           console.log('--- Dry-run оценка ---');
-          console.log(`Выборка для skip-rate: ${sample.length} чанков`);
-          console.log(`Skip-rate (Gate 1+2): ${(skipRate * 100).toFixed(1)}%`);
-          console.log(`Ожидаемое число LLM-вызовов: ${expectedSummarize}`);
-          console.log(`Ожидаемое число токенов: ${estimatedTokens.toLocaleString()}`);
-          console.log(`Оценка стоимости (Qwen2.5-7B): ${formatCost(estimatedCost)}`);
-          console.log('Референс KariPos (~18K чанков): $0.30–$0.70');
+          console.log(`Модель: ${appConfig.summarization.model}`);
+          console.log(
+            `Параметры стоимости: avgTokensPerChunk=${appConfig.summarization.cost.avgTokensPerChunk}, ` +
+            `pricePerTokenUsd=${appConfig.summarization.cost.pricePerTokenUsd}`,
+          );
+          console.log(`Выборка для skip-rate: ${estimate.sampleSize} чанков`);
+          console.log(`Skip-rate (Gate 1+2): ${(estimate.skipRate * 100).toFixed(1)}%`);
+          console.log(`Ожидаемое число LLM-вызовов: ${estimate.expectedSummarize}`);
+          console.log(`Ожидаемое число токенов: ${estimate.estimatedTokens.toLocaleString()}`);
+          console.log(`Оценка стоимости: ${formatCost(estimate.estimatedCostUsd)}`);
+          console.log('Референс KariPos (~18K чанков, Qwen2.5-7B): $0.30–$0.70');
           console.log('Запросы к провайдеру НЕ отправлялись.');
           return;
         }
@@ -162,52 +121,25 @@ export const summarizeCommand = new Command('summarize')
         const maxToProcess = options.limit ?? totalCandidates;
         const concurrency = appConfig.summarization.concurrency;
 
-        let processed = 0;
-        let summarized = 0;
-        let skippedCount = 0;
-        let failedCount = 0;
-
-        // Обработка батчами keyset-pagination.
-        while (processed < maxToProcess) {
-          const remaining = maxToProcess - processed;
-          const batchSize = Math.min(FETCH_BATCH_SIZE, remaining);
-
-          const rows = await chunkContentStorage.getWithNullSummaryForSource(
-            source.id,
-            batchSize,
-          );
-
-          if (rows.length === 0) {
-            break;
-          }
-
-          const candidates = rows.map((row) => ({
-            contentHash: row.content_hash,
-            input: toSummarizerInput(row as SummarizeCandidate),
-          }));
-
-          const batchResult = await processSummarizeBatch({
-            candidates,
-            summarizer,
-            embedder,
-            storage: chunkContentStorage,
-            concurrency,
-          });
-
-          summarized += batchResult.summarized;
-          skippedCount += batchResult.skipped;
-          failedCount += batchResult.failed;
-
-          processed += rows.length;
-          console.log(
-            `Обработано ${processed}/${maxToProcess}: ` +
-            `ok=${summarized}, skipped=${skippedCount}, failed=${failedCount}`,
-          );
-        }
+        const result = await runSummarizeLoop({
+          sourceId: source.id,
+          chunkContentStorage,
+          summarizer,
+          embedder,
+          concurrency,
+          maxToProcess,
+          fetchBatchSize: FETCH_BATCH_SIZE,
+          onProgress: (stats) => {
+            console.log(
+              `Обработано ${stats.processed}/${maxToProcess}: ` +
+              `ok=${stats.summarized}, skipped=${stats.skipped}, failed=${stats.failed}`,
+            );
+          },
+        });
 
         console.log(
-          `\nЗавершено. Обработано=${processed}, summarized=${summarized}, ` +
-          `skipped=${skippedCount}, failed=${failedCount}`,
+          `\nЗавершено. Обработано=${result.processed}, summarized=${result.summarized}, ` +
+          `skipped=${result.skipped}, failed=${result.failed}`,
         );
       } finally {
         await closeDb(sql);

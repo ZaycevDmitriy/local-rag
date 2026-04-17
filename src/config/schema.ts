@@ -97,9 +97,27 @@ export const SearchConfigSchema = z.object({
 
 // Схема конфигурации summarization (LLM-генерация описаний чанков).
 // Фича opt-in per source через `sources[].summarize: true`.
+
+// Дефолтная цена за токен модели Qwen2.5-7B на SiliconFlow ($0.05 / 1M токенов).
+// При смене `summarization.model` пользователь обязан задать собственный `pricePerTokenUsd`,
+// иначе dry-run покажет оценку для Qwen и введёт в заблуждение.
+const QWEN_DEFAULT_PRICE_PER_TOKEN_USD = 0.05 / 1_000_000;
+
+// Дефолтная средняя длина контента в токенах (грубая оценка, согласована с планом T07).
+const DEFAULT_AVG_TOKENS_PER_CHUNK = 200;
+
+// Верхняя граница concurrency: защищает от rate-limit-шторма у провайдера.
+// 64 выбрано как разумный максимум — выше провайдеры SiliconFlow/OpenAI реально не допустят.
+const MAX_SUMMARIZATION_CONCURRENCY = 64;
+
 export const SummarizationCostSchema = z.object({
   // Требовать запуск `rag summarize --dry-run` с выводом cost estimate до первого реального прогона.
   dryRunRequired: z.boolean().default(true),
+  // Средняя длина контента чанка в токенах. Используется dry-run оценкой.
+  avgTokensPerChunk: z.number().int().positive().default(DEFAULT_AVG_TOKENS_PER_CHUNK),
+  // Цена за один токен в USD. Дефолт рассчитан для Qwen2.5-7B-Instruct на SiliconFlow.
+  // При смене `summarization.model` обязательно переопределить.
+  pricePerTokenUsd: z.number().nonnegative().default(QWEN_DEFAULT_PRICE_PER_TOKEN_USD),
 });
 
 export const SummarizationConfigSchema = z.object({
@@ -108,10 +126,15 @@ export const SummarizationConfigSchema = z.object({
   apiKey: z.string().optional(),
   baseUrl: z.string().optional(),
   // Параллельность вызовов LLM — ограничивает rate limits провайдера.
-  concurrency: z.number().int().positive().default(4),
+  // Верхняя граница предотвращает пользовательскую ошибку вида `concurrency: 1000`.
+  concurrency: z.number().int().positive().max(MAX_SUMMARIZATION_CONCURRENCY).default(4),
   // HTTP timeout per request в миллисекундах.
   timeoutMs: z.number().int().positive().default(60_000),
-  cost: SummarizationCostSchema.default(() => ({ dryRunRequired: true })),
+  cost: SummarizationCostSchema.default(() => ({
+    dryRunRequired: true,
+    avgTokensPerChunk: DEFAULT_AVG_TOKENS_PER_CHUNK,
+    pricePerTokenUsd: QWEN_DEFAULT_PRICE_PER_TOKEN_USD,
+  })),
 });
 
 // Схема источника данных.
@@ -169,7 +192,11 @@ export const AppConfigSchema = z.object({
     model: 'Qwen/Qwen2.5-7B-Instruct',
     concurrency: 4,
     timeoutMs: 60_000,
-    cost: { dryRunRequired: true },
+    cost: {
+      dryRunRequired: true,
+      avgTokensPerChunk: DEFAULT_AVG_TOKENS_PER_CHUNK,
+      pricePerTokenUsd: QWEN_DEFAULT_PRICE_PER_TOKEN_USD,
+    },
   })),
   sources: z.array(SourceConfigSchema).default([]),
   indexing: IndexingConfigSchema.default(() => ({

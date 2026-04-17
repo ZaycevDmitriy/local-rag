@@ -27,10 +27,20 @@ const NARROW_THRESHOLD = 10_000;
 // TTL кэша sources (мс).
 const SOURCE_CACHE_TTL_MS = 5 * 60 * 1000;
 
+// TTL кэша hasSummaryForViews (мс). Соответствует SOURCE_CACHE_TTL_MS.
+// Допустимая задержка отражения `rag summarize` в MCP: false→true подхватится
+// после истечения TTL. Это компромисс между горячим путём search и свежестью.
+const SUMMARY_CACHE_TTL_MS = 5 * 60 * 1000;
+
+// Максимум записей summary-кэша для предотвращения unbounded growth.
+// Достаточно для десятков branch-views; при превышении удаляется самая старая.
+const SUMMARY_CACHE_MAX_ENTRIES = 128;
+
 // Оркестратор branch-aware hybrid search pipeline.
 export class SearchCoordinator {
   private sourceCache: Map<string, SourceRow> | null = null;
   private sourceCacheUpdatedAt = 0;
+  private summaryCache: Map<string, { result: boolean; at: number }> = new Map();
 
   constructor(
     private chunkStorage: ChunkStorage,
@@ -93,7 +103,7 @@ export class SearchCoordinator {
     // Решение про 3-way: флаг + наличие хотя бы одного non-NULL summary_embedding в views.
     const wantSummary = this.searchConfig.useSummaryVector === true;
     const hasSummary = wantSummary
-      ? await this.chunkContentStorage!.hasSummaryForViews(filters.sourceViewIds)
+      ? await this.checkSummaryForViewsCached(filters.sourceViewIds)
       : false;
     const run3Way = wantSummary && hasSummary;
 
@@ -397,5 +407,33 @@ export class SearchCoordinator {
     this.sourceCache = new Map(sources.map((s) => [s.id, s]));
     this.sourceCacheUpdatedAt = now;
     return this.sourceCache;
+  }
+
+  // TTL-кэш для hasSummaryForViews: защищает горячий путь MCP search от лишнего SQL
+  // round-trip на каждом запросе при включённом useSummaryVector.
+  // Ключ — отсортированные sourceViewIds, объединённые `|`; разные комбинации
+  // (branch vs active) живут в независимых записях.
+  private async checkSummaryForViewsCached(sourceViewIds: string[]): Promise<boolean> {
+    if (sourceViewIds.length === 0) return false;
+
+    const key = [...sourceViewIds].sort().join('|');
+    const now = Date.now();
+    const cached = this.summaryCache.get(key);
+
+    if (cached && now - cached.at < SUMMARY_CACHE_TTL_MS) {
+      return cached.result;
+    }
+
+    const result = await this.chunkContentStorage!.hasSummaryForViews(sourceViewIds);
+    this.summaryCache.set(key, { result, at: now });
+
+    // Простая FIFO-эвикция: когда карта переполнена, удаляем самый старый ключ.
+    // Map сохраняет порядок вставки, поэтому keys().next() отдаёт самый ранний.
+    if (this.summaryCache.size > SUMMARY_CACHE_MAX_ENTRIES) {
+      const oldestKey = this.summaryCache.keys().next().value as string | undefined;
+      if (oldestKey !== undefined) this.summaryCache.delete(oldestKey);
+    }
+
+    return result;
   }
 }

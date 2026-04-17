@@ -21,7 +21,9 @@ export class ChunkContentStorage {
   async insertBatch(contents: ChunkContentInsert[]): Promise<void> {
     if (contents.length === 0) return;
 
-    console.log(`[ChunkContentStorage] insertBatch: count=${contents.length}`);
+    // Лог идёт в stderr вместо stdout, чтобы MCP-режим не засорял JSON-RPC канал.
+    // Единая политика для всего ChunkContentStorage — см. stdout-discipline.test.ts.
+    console.error(`[ChunkContentStorage] insertBatch: count=${contents.length}`);
 
     for (let i = 0; i < contents.length; i += BATCH_SIZE) {
       const batch = contents.slice(i, i + BATCH_SIZE);
@@ -192,7 +194,7 @@ export class ChunkContentStorage {
   ): Promise<void> {
     if (updates.length === 0) return;
 
-    console.log(`[ChunkContentStorage] updateEmbeddings: count=${updates.length}`);
+    console.error(`[ChunkContentStorage] updateEmbeddings: count=${updates.length}`);
 
     for (let i = 0; i < updates.length; i += BATCH_SIZE) {
       const batch = updates.slice(i, i + BATCH_SIZE);
@@ -214,7 +216,7 @@ export class ChunkContentStorage {
   // Удаляет orphan chunk_contents, на которые не ссылается ни один chunk.
   // Grace period — минуты с момента создания.
   async deleteOrphans(gracePeriodMinutes = 60): Promise<number> {
-    console.log(`[ChunkContentStorage] deleteOrphans: gracePeriod=${gracePeriodMinutes}min`);
+    console.error(`[ChunkContentStorage] deleteOrphans: gracePeriod=${gracePeriodMinutes}min`);
 
     const result = await this.sql`
       DELETE FROM chunk_contents cc
@@ -225,7 +227,7 @@ export class ChunkContentStorage {
       AND cc.created_at < now() - ${gracePeriodMinutes + ' minutes'}::interval
     `;
 
-    console.log(`[ChunkContentStorage] deleteOrphans: deleted=${result.count}`);
+    console.error(`[ChunkContentStorage] deleteOrphans: deleted=${result.count}`);
 
     return result.count;
   }
