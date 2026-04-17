@@ -135,4 +135,136 @@ describe('ChunkContentStorage', () => {
     expect(result).toHaveLength(1);
     expect(result[0]!.contentHash).toBe('hash1');
   });
+
+  // --- summary methods (миграция 006). ---
+
+  describe('summary methods', () => {
+    it('getWithNullSummary без afterHash делает SELECT без cursor', async () => {
+      const mockFn = sql as unknown as ReturnType<typeof vi.fn>;
+      mockFn.mockResolvedValueOnce([]);
+
+      await storage.getWithNullSummary(10);
+
+      expect(mockFn).toHaveBeenCalled();
+    });
+
+    it('getWithNullSummary с afterHash формирует keyset cursor', async () => {
+      const mockFn = sql as unknown as ReturnType<typeof vi.fn>;
+      mockFn.mockResolvedValueOnce([{
+        content_hash: 'hash2',
+        content: 'body',
+        embedding: null,
+        summary: null,
+        summary_embedding: null,
+        created_at: new Date(),
+      }]);
+
+      const rows = await storage.getWithNullSummary(5, 'hash1');
+
+      expect(rows).toHaveLength(1);
+      expect(rows[0]!.content_hash).toBe('hash2');
+    });
+
+    it('countWithNullSummary возвращает число', async () => {
+      const mockFn = sql as unknown as ReturnType<typeof vi.fn>;
+      mockFn.mockResolvedValueOnce([{ count: '42' }]);
+
+      const n = await storage.countWithNullSummary();
+      expect(n).toBe(42);
+    });
+
+    it('updateSummaries не вызывает begin на пустом массиве', async () => {
+      await storage.updateSummaries([]);
+      expect(sql.begin).not.toHaveBeenCalled();
+    });
+
+    it('updateSummaries открывает транзакцию и UPDATE через tx.unsafe', async () => {
+      await storage.updateSummaries([
+        { contentHash: 'h1', summary: 'sum 1' },
+        { contentHash: 'h2', summary: 'sum 2' },
+      ]);
+
+      expect(sql.begin).toHaveBeenCalledTimes(1);
+    });
+
+    it('updateSummaryEmbeddings не вызывает begin на пустом массиве', async () => {
+      await storage.updateSummaryEmbeddings([]);
+      expect(sql.begin).not.toHaveBeenCalled();
+    });
+
+    it('updateSummaryEmbeddings вызывает begin для батча', async () => {
+      await storage.updateSummaryEmbeddings([
+        { contentHash: 'h1', embedding: [0.1, 0.2] },
+      ]);
+
+      expect(sql.begin).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('searchSummaryVector', () => {
+    it('broad mode: использует partial HNSW (WHERE summary_embedding IS NOT NULL)', async () => {
+      const unsafeFn = (sql as unknown as { unsafe: ReturnType<typeof vi.fn> }).unsafe;
+      unsafeFn.mockResolvedValueOnce([
+        { content_hash: 'h1', distance: 0.3 },
+      ]);
+
+      const result = await storage.searchSummaryVector([0.1, 0.2], 10);
+
+      expect(result).toHaveLength(1);
+      expect(result[0]).toEqual({ contentHash: 'h1', score: 1 - 0.3 });
+      expect(unsafeFn).toHaveBeenCalled();
+      const [sqlText] = unsafeFn.mock.calls[0]!;
+      expect(sqlText).toMatch(/summary_embedding IS NOT NULL/);
+    });
+
+    it('narrow mode: exact search по prefiltered content_hash set', async () => {
+      const unsafeFn = (sql as unknown as { unsafe: ReturnType<typeof vi.fn> }).unsafe;
+      unsafeFn.mockResolvedValueOnce([
+        { content_hash: 'h1', distance: 0.1 },
+      ]);
+
+      const result = await storage.searchSummaryVector([0.1], 10, ['h1', 'h2']);
+
+      expect(result).toHaveLength(1);
+      expect(result[0]!.contentHash).toBe('h1');
+      const [sqlText, params] = unsafeFn.mock.calls[0]!;
+      expect(sqlText).toMatch(/content_hash = ANY/);
+      expect(params[1]).toEqual(['h1', 'h2']);
+    });
+
+    it('пустой prefilter эквивалентен broad mode', async () => {
+      const unsafeFn = (sql as unknown as { unsafe: ReturnType<typeof vi.fn> }).unsafe;
+      unsafeFn.mockResolvedValueOnce([]);
+
+      await storage.searchSummaryVector([0.1], 5, []);
+
+      const [sqlText] = unsafeFn.mock.calls[0]!;
+      expect(sqlText).not.toMatch(/content_hash = ANY/);
+    });
+  });
+
+  describe('hasSummaryForViews', () => {
+    it('возвращает false для пустого списка views без SQL', async () => {
+      const mockFn = sql as unknown as ReturnType<typeof vi.fn>;
+      const result = await storage.hasSummaryForViews([]);
+      expect(result).toBe(false);
+      expect(mockFn).not.toHaveBeenCalled();
+    });
+
+    it('возвращает true когда SQL EXISTS вернул true', async () => {
+      const mockFn = sql as unknown as ReturnType<typeof vi.fn>;
+      mockFn.mockResolvedValueOnce([{ exists: true }]);
+
+      const result = await storage.hasSummaryForViews(['v1']);
+      expect(result).toBe(true);
+    });
+
+    it('возвращает false когда SQL EXISTS вернул false', async () => {
+      const mockFn = sql as unknown as ReturnType<typeof vi.fn>;
+      mockFn.mockResolvedValueOnce([{ exists: false }]);
+
+      const result = await storage.hasSummaryForViews(['v1']);
+      expect(result).toBe(false);
+    });
+  });
 });

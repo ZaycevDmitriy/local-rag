@@ -63,9 +63,11 @@ function defaultConfig(): SearchConfig {
   return {
     bm25Weight: 0.3,
     vectorWeight: 0.7,
+    summaryVectorWeight: 0.0,
     retrieveTopK: 50,
     finalTopK: 10,
     rrf: { k: 60 },
+    useSummaryVector: false,
   };
 }
 
@@ -392,5 +394,127 @@ describe('SearchCoordinator — branch-aware sourceName filter', () => {
       sourceType: undefined,
       pathPrefix: undefined,
     });
+  });
+});
+
+// --- 3-way search с summary vector. ---
+
+function threeWayConfig(useSummary: boolean, weights?: Partial<SearchConfig>): SearchConfig {
+  return {
+    bm25Weight: 0.2,
+    vectorWeight: 0.5,
+    summaryVectorWeight: 0.3,
+    retrieveTopK: 50,
+    finalTopK: 10,
+    rrf: { k: 60 },
+    useSummaryVector: useSummary,
+    ...weights,
+  };
+}
+
+function build3WayMocks() {
+  const base = createBranchAwareMocks();
+
+  // Расширяем chunkContentStorage: searchSummaryVector + hasSummaryForViews.
+  base.chunkContentStorage = {
+    searchBm25: vi.fn().mockResolvedValue([]),
+    searchVector: vi.fn().mockResolvedValue([]),
+    searchSummaryVector: vi.fn().mockResolvedValue([]),
+    hasSummaryForViews: vi.fn().mockResolvedValue(false),
+  } as unknown as ChunkContentStorage;
+
+  return base;
+}
+
+function build3WayCoordinator(
+  mocks: ReturnType<typeof build3WayMocks>,
+  useSummary: boolean,
+): SearchCoordinator {
+  return new SearchCoordinator(
+    mocks.chunkStorage,
+    mocks.sourceStorage,
+    mocks.embedder,
+    threeWayConfig(useSummary),
+    mocks.reranker,
+    mocks.chunkContentStorage,
+    mocks.sourceViewStorage,
+  );
+}
+
+describe('SearchCoordinator — 3-way search with summary vector', () => {
+  it('useSummaryVector=true И есть non-NULL summary → запускает searchSummaryVector', async () => {
+    const mocks = build3WayMocks();
+    vi.mocked(mocks.chunkContentStorage!.hasSummaryForViews as unknown as ReturnType<typeof vi.fn>)
+      .mockResolvedValue(true);
+    const coordinator = build3WayCoordinator(mocks, true);
+
+    const response = await coordinator.search({ query: 'test' });
+
+    expect(mocks.chunkContentStorage!.searchSummaryVector).toHaveBeenCalledTimes(1);
+    expect(mocks.chunkContentStorage!.hasSummaryForViews).toHaveBeenCalled();
+    expect(response.retrievalMode).toMatch(/\+summary$/);
+  });
+
+  it('useSummaryVector=true, но summary отсутствует → graceful fallback на 2-way', async () => {
+    const mocks = build3WayMocks();
+    vi.mocked(mocks.chunkContentStorage!.hasSummaryForViews as unknown as ReturnType<typeof vi.fn>)
+      .mockResolvedValue(false);
+    const coordinator = build3WayCoordinator(mocks, true);
+
+    const response = await coordinator.search({ query: 'test' });
+
+    expect(mocks.chunkContentStorage!.searchSummaryVector).not.toHaveBeenCalled();
+    expect(response.retrievalMode).not.toMatch(/\+summary/);
+  });
+
+  it('useSummaryVector=false → 3-й запрос не выполняется (даже если summary есть)', async () => {
+    const mocks = build3WayMocks();
+    vi.mocked(mocks.chunkContentStorage!.hasSummaryForViews as unknown as ReturnType<typeof vi.fn>)
+      .mockResolvedValue(true);
+    const coordinator = build3WayCoordinator(mocks, false);
+
+    await coordinator.search({ query: 'test' });
+
+    expect(mocks.chunkContentStorage!.searchSummaryVector).not.toHaveBeenCalled();
+    expect(mocks.chunkContentStorage!.hasSummaryForViews).not.toHaveBeenCalled();
+  });
+
+  it('3-way: заполняет scores.summaryVector для попавших в summary-список результатов', async () => {
+    const mocks = build3WayMocks();
+    vi.mocked(mocks.chunkContentStorage!.hasSummaryForViews as unknown as ReturnType<typeof vi.fn>)
+      .mockResolvedValue(true);
+    vi.mocked(mocks.chunkContentStorage!.searchSummaryVector as unknown as ReturnType<typeof vi.fn>)
+      .mockResolvedValue([{ contentHash: 'hash', score: 0.85 }]);
+    vi.mocked(mocks.chunkStorage.getContentHashes).mockResolvedValue(['hash']);
+    vi.mocked(mocks.chunkStorage.resolveOccurrences as unknown as ReturnType<typeof vi.fn>)
+      .mockResolvedValue([{
+        id: 'c1',
+        source_view_id: 'view-1',
+        indexed_file_id: 'f1',
+        chunk_content_hash: 'hash',
+        path: 'src/a.ts',
+        source_type: 'code',
+        start_line: 1,
+        end_line: 1,
+        header_path: null,
+        language: 'typescript',
+        ordinal: 0,
+        metadata: {},
+        created_at: new Date(),
+        source_id: 'src-karipos',
+        content: '',
+        content_hash: 'hash',
+        embedding: null,
+      }]);
+    vi.mocked(mocks.chunkStorage.getByIds).mockResolvedValue([makeChunk('c1')]);
+    vi.mocked(mocks.reranker.rerank).mockResolvedValue([
+      { id: 'c1', score: 0.99, index: 0 },
+    ]);
+
+    const coordinator = build3WayCoordinator(mocks, true);
+    const response = await coordinator.search({ query: 'test' });
+
+    expect(response.results).toHaveLength(1);
+    expect(response.results[0]!.scores.summaryVector).toBe(0.85);
   });
 });
