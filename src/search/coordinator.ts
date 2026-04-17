@@ -86,23 +86,45 @@ export class SearchCoordinator {
     // 3. Embed query.
     const queryEmbedding = await this.embedder.embedQuery(query.query);
 
-    // 4. Parallel BM25 + vector (content-level).
+    // 4. Parallel BM25 + vector (+ optional summary vector).
     const topK = this.searchConfig.retrieveTopK;
     const hashesForSearch = isNarrow ? contentHashes : undefined;
 
-    const [bm25Results, vectorResults] = await Promise.all([
-      this.chunkContentStorage!.searchBm25(query.query, topK, hashesForSearch),
-      this.chunkContentStorage!.searchVector(queryEmbedding, topK, hashesForSearch),
+    // Решение про 3-way: флаг + наличие хотя бы одного non-NULL summary_embedding в views.
+    const wantSummary = this.searchConfig.useSummaryVector === true;
+    const hasSummary = wantSummary
+      ? await this.chunkContentStorage!.hasSummaryForViews(filters.sourceViewIds)
+      : false;
+    const run3Way = wantSummary && hasSummary;
+
+    console.error(
+      `[search] 3-way: wantSummary=${wantSummary}, hasSummary=${hasSummary}, run3Way=${run3Way}`,
+    );
+
+    const bm25Promise = this.chunkContentStorage!
+      .searchBm25(query.query, topK, hashesForSearch);
+    const vectorPromise = this.chunkContentStorage!
+      .searchVector(queryEmbedding, topK, hashesForSearch);
+    const summaryPromise = run3Way
+      ? this.chunkContentStorage!.searchSummaryVector(queryEmbedding, topK, hashesForSearch)
+      : Promise.resolve<Array<{ contentHash: string; score: number }>>([]);
+
+    const [bm25Results, vectorResults, summaryResults] = await Promise.all([
+      bm25Promise,
+      vectorPromise,
+      summaryPromise,
     ]);
 
     // 5. Collect all scored content hashes.
     const allContentHashes = new Set([
       ...bm25Results.map((r) => r.contentHash),
       ...vectorResults.map((r) => r.contentHash),
+      ...summaryResults.map((r) => r.contentHash),
     ]);
 
     if (allContentHashes.size === 0) {
-      return { results: [], totalCandidates: 0, retrievalMode: mode };
+      const retrievalMode = run3Way ? `${mode}+summary` : mode;
+      return { results: [], totalCandidates: 0, retrievalMode };
     }
 
     // 6. Resolve → occurrence-level (dedup: one per content_hash per view).
@@ -119,9 +141,11 @@ export class SearchCoordinator {
     // 7. Convert content scores → occurrence-level ScoredChunk.
     const bm25ScoreMap = new Map(bm25Results.map((r) => [r.contentHash, r.score]));
     const vectorScoreMap = new Map(vectorResults.map((r) => [r.contentHash, r.score]));
+    const summaryScoreMap = new Map(summaryResults.map((r) => [r.contentHash, r.score]));
 
     const bm25Occurrences: ScoredChunk[] = [];
     const vectorOccurrences: ScoredChunk[] = [];
+    const summaryOccurrences: ScoredChunk[] = [];
 
     for (const [contentHash, occ] of hashToOccurrence) {
       const bm25Score = bm25ScoreMap.get(contentHash);
@@ -132,19 +156,26 @@ export class SearchCoordinator {
       if (vectorScore !== undefined) {
         vectorOccurrences.push({ id: occ.id, score: vectorScore });
       }
+      const summaryScore = summaryScoreMap.get(contentHash);
+      if (summaryScore !== undefined) {
+        summaryOccurrences.push({ id: occ.id, score: summaryScore });
+      }
     }
 
     // Сортируем по score desc для правильного RRF ranking.
     bm25Occurrences.sort((a, b) => b.score - a.score);
     vectorOccurrences.sort((a, b) => b.score - a.score);
+    summaryOccurrences.sort((a, b) => b.score - a.score);
 
-    // 8. RRF fusion.
+    // 8. RRF fusion (3-way при run3Way, иначе 2-way).
     const fused = rrfFuse(
       bm25Occurrences,
       vectorOccurrences,
       this.searchConfig.rrf.k,
       this.searchConfig.bm25Weight,
       this.searchConfig.vectorWeight,
+      summaryOccurrences,
+      run3Way ? this.searchConfig.summaryVectorWeight : 0,
     );
 
     const candidates = fused.slice(0, this.searchConfig.retrieveTopK);
@@ -187,16 +218,20 @@ export class SearchCoordinator {
         scores: {
           bm25: bm25ScoreMap.get(chunk.chunk_content_hash) ?? null,
           vector: vectorScoreMap.get(chunk.chunk_content_hash) ?? null,
+          summaryVector: run3Way
+            ? summaryScoreMap.get(chunk.chunk_content_hash) ?? null
+            : null,
           rrf: rrfScoreMap.get(chunk.id) ?? 0,
           rerank: rerankScoreMap.get(chunk.id) ?? null,
         },
       });
     }
 
+    const retrievalMode = run3Way ? `${mode}+summary` : mode;
     return {
       results,
       totalCandidates: fused.length,
-      retrievalMode: mode,
+      retrievalMode,
     };
   }
 
@@ -341,6 +376,7 @@ export class SearchCoordinator {
         scores: {
           bm25: bm25ScoreMap.get(chunk.id) ?? null,
           vector: vectorScoreMap.get(chunk.id) ?? null,
+          summaryVector: null,
           rrf: rrfScoreMap.get(chunk.id) ?? 0,
           rerank: rerankScoreMap.get(chunk.id) ?? null,
         },

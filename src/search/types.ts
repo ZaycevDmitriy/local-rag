@@ -21,6 +21,9 @@ export interface SearchFilters {
   pathPrefix?: string;
 }
 
+// Источник candidate rank (для отладки/тестирования 3-way RRF).
+export type ScoreSource = 'bm25' | 'vec' | 'vec-summary';
+
 // Фрагмент с оценкой (промежуточный результат).
 export interface ScoredChunk {
   id: string;
@@ -54,9 +57,11 @@ export interface ChunkCoordinates {
 }
 
 // Оценки фрагмента по различным метрикам.
+// summaryVector появляется при включённом 3-way поиске; null когда не применялся.
 export interface ChunkScores {
   bm25: number | null;
   vector: number | null;
+  summaryVector: number | null;
   rrf: number;
   rerank: number | null;
 }
