@@ -1,97 +1,306 @@
 {
-  "version": 1,
+  "version": 2,
   "source": "karipos",
-  "description": "Golden set for AI-powered summarization A/B benchmark. Paraphrased developer-style queries.",
+  "description": "Golden set v2 for AI-powered summarization A/B benchmark. Primary match is path + lineRange overlap; fqn is optional metadata only.",
   "queries": [
     {
-      "query": "how does session token refresh work",
-      "goldenFqns": [
-        "auth.session.refresh",
-        "auth.session.refreshAccessToken"
+      "query": "where do axios requests add bearer token for user session",
+      "expected": [
+        {
+          "path": "src/app/lib/hooks/useInterceptors.tsx",
+          "startLine": 124,
+          "endLine": 180
+        }
       ],
       "category": "auth",
       "difficulty": "easy",
       "seedKind": "manual"
     },
     {
-      "query": "where is the payment flow started when user taps pay",
-      "goldenFqns": [
-        "payment.checkout.initiate",
-        "payment.flow.start"
+      "query": "how are unauthorized and session closed api errors converted",
+      "expected": [
+        {
+          "path": "src/app/lib/hooks/useInterceptors.tsx",
+          "startLine": 34,
+          "endLine": 110
+        }
       ],
-      "category": "payments",
+      "category": "auth",
       "difficulty": "medium",
       "seedKind": "manual"
     },
     {
-      "query": "retry policy for failed http requests",
-      "goldenFqns": [
-        "utils.fetchWithRetry",
-        "utils.retry.computeDelay"
+      "query": "login flow after cashier enters credentials and grants are checked",
+      "expected": [
+        {
+          "path": "src/features/Auth/authActions.ts",
+          "startLine": 151,
+          "endLine": 184
+        },
+        {
+          "path": "src/features/Auth/authActions.ts",
+          "startLine": 186,
+          "endLine": 230
+        }
       ],
-      "category": "infra",
+      "category": "auth",
+      "difficulty": "medium",
+      "seedKind": "manual"
+    },
+    {
+      "query": "change expired password after confirm code on auth screen",
+      "expected": [
+        {
+          "path": "src/features/Auth/authActions.ts",
+          "startLine": 285,
+          "endLine": 336
+        },
+        {
+          "path": "src/features/Auth/components/AuthForm/FormChangePassword.tsx",
+          "startLine": 25,
+          "endLine": 106
+        }
+      ],
+      "category": "auth",
+      "difficulty": "medium",
+      "seedKind": "manual"
+    },
+    {
+      "query": "what opens payment modal from basket pay button",
+      "expected": [
+        {
+          "path": "src/features/Sell/components/BasketPayButton/hooks/useOpenPaymentButtonActions.ts",
+          "startLine": 43,
+          "endLine": 131,
+          "fqn": "useOpenPaymentButtonActions"
+        }
+      ],
+      "category": "payment",
       "difficulty": "easy",
       "seedKind": "manual"
     },
     {
-      "query": "barcode scanner screen and camera permissions",
-      "goldenFqns": [
-        "scanner.screen.BarcodeScannerScreen",
-        "scanner.permissions.requestCamera"
+      "query": "choose available wallet pay provider before adding payment",
+      "expected": [
+        {
+          "path": "src/features/WalletPay/model/getPaymentProviders.ts",
+          "startLine": 24,
+          "endLine": 78,
+          "fqn": "getPaymentProviders"
+        },
+        {
+          "path": "src/features/WalletPay/model/getPaymentProvider.ts",
+          "startLine": 12,
+          "endLine": 60,
+          "fqn": "getPaymentProvider"
+        }
       ],
-      "category": "ui",
+      "category": "payment",
       "difficulty": "medium",
       "seedKind": "manual"
     },
     {
-      "query": "how is cart state stored locally after app restart",
-      "goldenFqns": [
-        "cart.persistence.hydrate",
-        "cart.storage.persist"
+      "query": "show pay modal and prepare payment view payload",
+      "expected": [
+        {
+          "path": "src/widgets/PaymentView/model/showPayModal.ts",
+          "startLine": 8,
+          "endLine": 33,
+          "fqn": "showPayModal"
+        }
       ],
-      "category": "storage",
+      "category": "payment",
+      "difficulty": "easy",
+      "seedKind": "manual"
+    },
+    {
+      "query": "base params for payment process document and cash zone",
+      "expected": [
+        {
+          "path": "src/features/PaymentProcesses/helpers/getBaseParams.ts",
+          "startLine": 24,
+          "endLine": 56
+        }
+      ],
+      "category": "payment",
       "difficulty": "medium",
       "seedKind": "manual"
     },
     {
-      "query": "print receipt to paired bluetooth printer",
-      "goldenFqns": [
-        "printer.bluetooth.print",
-        "receipt.print.ReceiptPrinter"
+      "query": "subscribe to order counters from socket and refresh filters",
+      "expected": [
+        {
+          "path": "src/app/lib/hooks/useOrders.ts",
+          "startLine": 21,
+          "endLine": 147
+        }
       ],
-      "category": "integration",
+      "category": "order_sync",
       "difficulty": "medium",
       "seedKind": "manual"
     },
     {
-      "query": "offline queue for sales and sync on reconnect",
-      "goldenFqns": [
-        "sync.offlineQueue",
-        "sales.offline.enqueue"
+      "query": "socket connection uses device token and session token",
+      "expected": [
+        {
+          "path": "src/app/lib/hooks/useSocket.tsx",
+          "startLine": 13,
+          "endLine": 42
+        }
       ],
-      "category": "sync",
-      "difficulty": "hard",
-      "seedKind": "hard-case"
+      "category": "order_sync",
+      "difficulty": "medium",
+      "seedKind": "manual"
     },
     {
-      "query": "why is the app splash screen delayed on cold start",
-      "goldenFqns": [
-        "boot.splash.SplashScreen",
-        "boot.coldStart.initialize"
+      "query": "socket helper methods for orders and fast orders channels",
+      "expected": [
+        {
+          "path": "src/common/lib/SocketMethods.ts",
+          "startLine": 15,
+          "endLine": 107
+        }
       ],
-      "category": "perf",
-      "difficulty": "hard",
-      "seedKind": "hard-case"
+      "category": "order_sync",
+      "difficulty": "medium",
+      "seedKind": "manual"
     },
     {
-      "query": "feature flag gating for the new returns flow",
-      "goldenFqns": [
-        "config.featureFlags.returnsFlowV2",
-        "returns.flow.v2"
+      "query": "basket orders screen applies status filters and sections",
+      "expected": [
+        {
+          "path": "src/features/Orders/components/BasketOrders/index.tsx",
+          "startLine": 90,
+          "endLine": 220
+        },
+        {
+          "path": "src/features/Orders/components/BasketOrders/OrderStatusFilter.tsx",
+          "startLine": 16,
+          "endLine": 119
+        }
       ],
-      "category": "config",
+      "category": "order_sync",
       "difficulty": "hard",
-      "seedKind": "hard-case"
+      "seedKind": "manual"
+    },
+    {
+      "query": "print receipt through Aisino fiscal register",
+      "expected": [
+        {
+          "path": "src/AMAisino/helpers/aisinoPrintReceipt.ts",
+          "startLine": 21,
+          "endLine": 135
+        }
+      ],
+      "category": "receipt_printing",
+      "difficulty": "medium",
+      "seedKind": "manual"
+    },
+    {
+      "query": "build Aisino receipt data before fiscal print",
+      "expected": [
+        {
+          "path": "src/AMAisino/helpers/createAisinoReceiptData.ts",
+          "startLine": 11,
+          "endLine": 47
+        },
+        {
+          "path": "src/AMAisino/helpers/createItemsArrayForAisinoReceipt.ts",
+          "startLine": 9,
+          "endLine": 44
+        }
+      ],
+      "category": "receipt_printing",
+      "difficulty": "medium",
+      "seedKind": "manual"
+    },
+    {
+      "query": "native bluetooth printer sends receipt bytes to device",
+      "expected": [
+        {
+          "path": "android/app/src/main/java/com/karipos/Lad/Native/Printer.java",
+          "startLine": 99,
+          "endLine": 193
+        },
+        {
+          "path": "android/app/src/main/java/com/karipos/Lad/Native/Printer.java",
+          "startLine": 280,
+          "endLine": 335
+        }
+      ],
+      "category": "receipt_printing",
+      "difficulty": "hard",
+      "seedKind": "manual"
+    },
+    {
+      "query": "send document print request to print service endpoint",
+      "expected": [
+        {
+          "path": "src/common/lib/hapi/index.ts",
+          "startLine": 1,
+          "endLine": 2910
+        }
+      ],
+      "category": "receipt_printing",
+      "difficulty": "hard",
+      "seedKind": "manual"
+    },
+    {
+      "query": "main stack screen registration for app navigation",
+      "expected": [
+        {
+          "path": "src/pages/MainStack.tsx",
+          "startLine": 270,
+          "endLine": 369
+        }
+      ],
+      "category": "navigation_ui",
+      "difficulty": "medium",
+      "seedKind": "manual"
+    },
+    {
+      "query": "desktop menu button handlers navigate to POS sections",
+      "expected": [
+        {
+          "path": "src/features/Menu/components/Desktop/useButtonHandlers.ts",
+          "startLine": 71,
+          "endLine": 183
+        }
+      ],
+      "category": "navigation_ui",
+      "difficulty": "medium",
+      "seedKind": "manual"
+    },
+    {
+      "query": "barcode scanner hook stops scanning when payment modal is open",
+      "expected": [
+        {
+          "path": "src/app/lib/hooks/useScanner.ts",
+          "startLine": 17,
+          "endLine": 89
+        }
+      ],
+      "category": "navigation_ui",
+      "difficulty": "medium",
+      "seedKind": "manual"
+    },
+    {
+      "query": "favorite menu renders POS desktop shortcuts",
+      "expected": [
+        {
+          "path": "src/features/Menu/components/FavoriteMenu/index.tsx",
+          "startLine": 27,
+          "endLine": 147
+        },
+        {
+          "path": "src/features/Menu/components/MenuButton/index.tsx",
+          "startLine": 13,
+          "endLine": 95
+        }
+      ],
+      "category": "navigation_ui",
+      "difficulty": "easy",
+      "seedKind": "manual"
     }
   ]
 }

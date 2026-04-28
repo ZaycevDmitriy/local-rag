@@ -32,6 +32,7 @@ src/
 ├── embeddings/             # Модуль: генерация векторов (TextEmbedder interface + реализации)
 ├── export/                 # Модуль: export/import (архивы, SQL, manifest)
 ├── indexer/                # Модуль: оркестрация индексации (зависит от chunks, embeddings, storage)
+│   └── _helpers/           # Внутренние helper'ы indexer-модуля
 ├── mcp/                    # Модуль: MCP server + tool handlers
 ├── search/                 # Модуль: поисковый pipeline (BM25 + vector + RRF)
 │   └── reranker/           # Подмодуль: реранкинг (Reranker interface + реализации)

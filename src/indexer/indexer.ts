@@ -15,6 +15,7 @@ import type {
 } from '../storage/index.js';
 import type { ScannedFile } from '../sources/index.js';
 import { pMap } from '../utils/index.js';
+import { buildChunkMetadataJson } from './_helpers/metadata.js';
 import { detectChanges, type ChangedFile } from './incremental.js';
 import type { IndexResult, ProgressReporter } from './progress.js';
 
@@ -149,6 +150,7 @@ export class Indexer {
       }
       for (let ordinal = 0; ordinal < chunks.length; ordinal++) {
         const chunk = chunks[ordinal]!;
+        const metadata = buildChunkMetadataJson(chunk.metadata);
         allOccurrences.push({
           sourceViewId: view.id,
           indexedFileId,
@@ -160,7 +162,7 @@ export class Indexer {
           headerPath: chunk.metadata.headerPath,
           language: chunk.metadata.language,
           ordinal,
-          metadata: {},
+          metadata,
         });
       }
     }
@@ -214,6 +216,7 @@ export class Indexer {
             if (!repairContentMap.has(chunk.contentHash)) {
               repairContentMap.set(chunk.contentHash, chunk.content);
             }
+            const metadata = buildChunkMetadataJson(chunk.metadata);
             repairOccurrences.push({
               sourceViewId: view.id,
               indexedFileId: chunklessFile.id,
@@ -225,7 +228,7 @@ export class Indexer {
               headerPath: chunk.metadata.headerPath,
               language: chunk.metadata.language,
               ordinal,
-              metadata: {},
+              metadata,
             });
           }
 
