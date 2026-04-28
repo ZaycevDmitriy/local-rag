@@ -28,6 +28,7 @@ skills-lock.json
 .opencode/
 coverage/
 docs/ai-factory-workflow.md
+docs/promts/
 docs-html/
 opencode.json
 .idea/
