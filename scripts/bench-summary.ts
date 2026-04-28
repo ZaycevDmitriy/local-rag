@@ -115,7 +115,7 @@ async function evaluateQuery(
       break;
     }
   }
-  // TODO: optional fqn-bonus counter (follow-up PR, read candidate.coordinates.fqn).
+  // TODO(#13): optional fqn-bonus counter — read candidate.coordinates.fqn.
 
   return {
     query: q.query,
