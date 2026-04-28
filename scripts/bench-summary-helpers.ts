@@ -126,12 +126,6 @@ export function normalizePath(path: string): string {
   return path.replace(/\\/g, '/').replace(/^\.\//, '');
 }
 
-function debugMatch(message: string): void {
-  if (process.env['LOG_LEVEL'] === 'debug' || process.env['LOG_LEVEL'] === 'DEBUG') {
-    console.log(message);
-  }
-}
-
 export function matchByPathAndLineRange(
   expected: BaselineExpectation,
   candidate: Pick<SearchResult, 'path' | 'coordinates'>,
@@ -140,13 +134,7 @@ export function matchByPathAndLineRange(
   const normalizedCandidatePath = normalizePath(candidate.path);
   const startLine = candidate.coordinates.startLine ?? -Infinity;
   const endLine = candidate.coordinates.endLine ?? Infinity;
-  const matched = normalizedExpectedPath === normalizedCandidatePath
+
+  return normalizedExpectedPath === normalizedCandidatePath
     && !(endLine < expected.startLine || startLine > expected.endLine);
-
-  debugMatch(
-    `[bench] match path=${normalizedCandidatePath} lines=${startLine}-${endLine} ` +
-    `expected=${expected.startLine}-${expected.endLine} -> ${matched}`,
-  );
-
-  return matched;
 }
