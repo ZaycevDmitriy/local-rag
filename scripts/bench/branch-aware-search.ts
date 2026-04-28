@@ -211,7 +211,7 @@ async function runBenchmark(
 
       if (i === 0) {
         results.push({
-          scenario: "BM25+prefix 'function'",
+          scenario: 'BM25+prefix \'function\'',
           shape,
           filterSelectivity: `${viewIds.length} views + prefix`,
           rowCount: (rows as unknown[]).length,
