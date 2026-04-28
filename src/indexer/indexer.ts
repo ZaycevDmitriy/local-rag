@@ -151,8 +151,6 @@ export class Indexer {
       for (let ordinal = 0; ordinal < chunks.length; ordinal++) {
         const chunk = chunks[ordinal]!;
         const metadata = buildChunkMetadataJson(chunk.metadata);
-        const metadataKeys = Object.keys(metadata);
-        console.log(`[Indexer.indexView] built metadata for ${path}: keys=${metadataKeys.join(',')}`);
         allOccurrences.push({
           sourceViewId: view.id,
           indexedFileId,
@@ -219,11 +217,6 @@ export class Indexer {
               repairContentMap.set(chunk.contentHash, chunk.content);
             }
             const metadata = buildChunkMetadataJson(chunk.metadata);
-            const metadataKeys = Object.keys(metadata);
-            console.log(
-              `[Indexer.indexView] repair built metadata for ${chunklessFile.path}: ` +
-              `keys=${metadataKeys.join(',')}`,
-            );
             repairOccurrences.push({
               sourceViewId: view.id,
               indexedFileId: chunklessFile.id,
