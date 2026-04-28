@@ -1,0 +1,17 @@
+[
+  {
+    "indexrelname": "idx_chunks_language",
+    "idx_scan": null,
+    "exists": false
+  },
+  {
+    "indexrelname": "idx_chunks_path",
+    "idx_scan": "28",
+    "exists": true
+  },
+  {
+    "indexrelname": "idx_chunks_source_type",
+    "idx_scan": null,
+    "exists": false
+  }
+]

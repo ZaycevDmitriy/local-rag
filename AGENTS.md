@@ -30,6 +30,7 @@ src/
   embeddings/           # TextEmbedder interface, Jina/OpenAI/SiliconFlow implementations, factory
   export/               # Export/import v2: manifest, archive (tar.gz), SQL (6 tables), sanitizer
   indexer/              # Branch-aware indexing: snapshot detection, view reconciliation, blob/content dedup
+    _helpers/           # Internal indexer helpers (metadata JSON projection)
   mcp/                  # MCP server + 4 tool handlers (search supports optional branch parameter)
   search/               # Branch-aware hybrid search: BM25 + vector (narrow/broad) + RRF + dedup
     reranker/           # Reranker interface, Jina/SiliconFlow/Noop implementations, factory

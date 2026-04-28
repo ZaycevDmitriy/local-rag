@@ -1,0 +1,380 @@
+[search] resolved active views: 1 (sourceId=87709deb-913d-4cce-88d1-8573837dcc3b)
+[search] branch-aware: views=1, sourceType=all, pathPrefix=none
+[ChunkStorage] getContentHashes: views=1, result=14887
+[search] mode=broad, contentHashes=14887
+[OpenAITextEmbedder] Response validated: 1 embeddings
+[search] 3-way: wantSummary=false, hasSummary=false, run3Way=false
+[ChunkContentStorage] searchBm25: query="where & do & axios & requests & add & bearer & token & for & user & session", limit=50, prefilter=none
+[ChunkContentStorage] searchVector: limit=50, prefilter=none
+[ChunkStorage] resolveOccurrences: input=40, result=37
+[search] resolved active views: 1 (sourceId=87709deb-913d-4cce-88d1-8573837dcc3b)
+[search] branch-aware: views=1, sourceType=all, pathPrefix=none
+[ChunkStorage] getContentHashes: views=1, result=14887
+[search] mode=broad, contentHashes=14887
+[OpenAITextEmbedder] Response validated: 1 embeddings
+[search] 3-way: wantSummary=false, hasSummary=false, run3Way=false
+[ChunkContentStorage] searchBm25: query="how & are & unauthorized & and & session & closed & api & errors & converted", limit=50, prefilter=none
+[ChunkContentStorage] searchVector: limit=50, prefilter=none
+[ChunkStorage] resolveOccurrences: input=40, result=37
+[search] resolved active views: 1 (sourceId=87709deb-913d-4cce-88d1-8573837dcc3b)
+[search] branch-aware: views=1, sourceType=all, pathPrefix=none
+[ChunkStorage] getContentHashes: views=1, result=14887
+[search] mode=broad, contentHashes=14887
+[OpenAITextEmbedder] Response validated: 1 embeddings
+[search] 3-way: wantSummary=false, hasSummary=false, run3Way=false
+[ChunkContentStorage] searchBm25: query="login & flow & after & cashier & enters & credentials & and & grants & are & checked", limit=50, prefilter=none
+[ChunkContentStorage] searchVector: limit=50, prefilter=none
+[ChunkStorage] resolveOccurrences: input=40, result=40
+[search] resolved active views: 1 (sourceId=87709deb-913d-4cce-88d1-8573837dcc3b)
+[search] branch-aware: views=1, sourceType=all, pathPrefix=none
+[ChunkStorage] getContentHashes: views=1, result=14887
+[search] mode=broad, contentHashes=14887
+[OpenAITextEmbedder] Response validated: 1 embeddings
+[search] 3-way: wantSummary=false, hasSummary=false, run3Way=false
+[ChunkContentStorage] searchBm25: query="change & expired & password & after & confirm & code & on & auth & screen", limit=50, prefilter=none
+[ChunkContentStorage] searchVector: limit=50, prefilter=none
+[ChunkStorage] resolveOccurrences: input=40, result=40
+[search] resolved active views: 1 (sourceId=87709deb-913d-4cce-88d1-8573837dcc3b)
+[search] branch-aware: views=1, sourceType=all, pathPrefix=none
+[ChunkStorage] getContentHashes: views=1, result=14887
+[search] mode=broad, contentHashes=14887
+[OpenAITextEmbedder] Response validated: 1 embeddings
+[search] 3-way: wantSummary=false, hasSummary=false, run3Way=false
+[ChunkContentStorage] searchBm25: query="what & opens & payment & modal & from & basket & pay & button", limit=50, prefilter=none
+[ChunkContentStorage] searchVector: limit=50, prefilter=none
+[ChunkStorage] resolveOccurrences: input=40, result=36
+[search] resolved active views: 1 (sourceId=87709deb-913d-4cce-88d1-8573837dcc3b)
+[search] branch-aware: views=1, sourceType=all, pathPrefix=none
+[ChunkStorage] getContentHashes: views=1, result=14887
+[search] mode=broad, contentHashes=14887
+[OpenAITextEmbedder] Response validated: 1 embeddings
+[search] 3-way: wantSummary=false, hasSummary=false, run3Way=false
+[ChunkContentStorage] searchBm25: query="choose & available & wallet & pay & provider & before & adding & payment", limit=50, prefilter=none
+[ChunkContentStorage] searchVector: limit=50, prefilter=none
+[ChunkStorage] resolveOccurrences: input=40, result=40
+[search] resolved active views: 1 (sourceId=87709deb-913d-4cce-88d1-8573837dcc3b)
+[search] branch-aware: views=1, sourceType=all, pathPrefix=none
+[ChunkStorage] getContentHashes: views=1, result=14887
+[search] mode=broad, contentHashes=14887
+[OpenAITextEmbedder] Response validated: 1 embeddings
+[search] 3-way: wantSummary=false, hasSummary=false, run3Way=false
+[ChunkContentStorage] searchBm25: query="show & pay & modal & and & prepare & payment & view & payload", limit=50, prefilter=none
+[ChunkContentStorage] searchVector: limit=50, prefilter=none
+[ChunkStorage] resolveOccurrences: input=40, result=32
+[search] resolved active views: 1 (sourceId=87709deb-913d-4cce-88d1-8573837dcc3b)
+[search] branch-aware: views=1, sourceType=all, pathPrefix=none
+[ChunkStorage] getContentHashes: views=1, result=14887
+[search] mode=broad, contentHashes=14887
+[OpenAITextEmbedder] Response validated: 1 embeddings
+[search] 3-way: wantSummary=false, hasSummary=false, run3Way=false
+[ChunkContentStorage] searchBm25: query="base & params & for & payment & process & document & and & cash & zone", limit=50, prefilter=none
+[ChunkContentStorage] searchVector: limit=50, prefilter=none
+[ChunkStorage] resolveOccurrences: input=40, result=40
+[search] resolved active views: 1 (sourceId=87709deb-913d-4cce-88d1-8573837dcc3b)
+[search] branch-aware: views=1, sourceType=all, pathPrefix=none
+[ChunkStorage] getContentHashes: views=1, result=14887
+[search] mode=broad, contentHashes=14887
+[OpenAITextEmbedder] Response validated: 1 embeddings
+[search] 3-way: wantSummary=false, hasSummary=false, run3Way=false
+[ChunkContentStorage] searchBm25: query="subscribe & to & order & counters & from & socket & and & refresh & filters", limit=50, prefilter=none
+[ChunkContentStorage] searchVector: limit=50, prefilter=none
+[ChunkStorage] resolveOccurrences: input=40, result=39
+[search] resolved active views: 1 (sourceId=87709deb-913d-4cce-88d1-8573837dcc3b)
+[search] branch-aware: views=1, sourceType=all, pathPrefix=none
+[ChunkStorage] getContentHashes: views=1, result=14887
+[search] mode=broad, contentHashes=14887
+[OpenAITextEmbedder] Response validated: 1 embeddings
+[search] 3-way: wantSummary=false, hasSummary=false, run3Way=false
+[ChunkContentStorage] searchBm25: query="socket & connection & uses & device & token & and & session & token", limit=50, prefilter=none
+[ChunkContentStorage] searchVector: limit=50, prefilter=none
+[ChunkStorage] resolveOccurrences: input=40, result=36
+[search] resolved active views: 1 (sourceId=87709deb-913d-4cce-88d1-8573837dcc3b)
+[search] branch-aware: views=1, sourceType=all, pathPrefix=none
+[ChunkStorage] getContentHashes: views=1, result=14887
+[search] mode=broad, contentHashes=14887
+[OpenAITextEmbedder] Response validated: 1 embeddings
+[search] 3-way: wantSummary=false, hasSummary=false, run3Way=false
+[ChunkContentStorage] searchBm25: query="socket & helper & methods & for & orders & and & fast & orders & channels", limit=50, prefilter=none
+[ChunkContentStorage] searchVector: limit=50, prefilter=none
+[ChunkStorage] resolveOccurrences: input=40, result=38
+[search] resolved active views: 1 (sourceId=87709deb-913d-4cce-88d1-8573837dcc3b)
+[search] branch-aware: views=1, sourceType=all, pathPrefix=none
+[ChunkStorage] getContentHashes: views=1, result=14887
+[search] mode=broad, contentHashes=14887
+[OpenAITextEmbedder] Response validated: 1 embeddings
+[search] 3-way: wantSummary=false, hasSummary=false, run3Way=false
+[ChunkContentStorage] searchBm25: query="basket & orders & screen & applies & status & filters & and & sections", limit=50, prefilter=none
+[ChunkContentStorage] searchVector: limit=50, prefilter=none
+[ChunkStorage] resolveOccurrences: input=40, result=38
+[search] resolved active views: 1 (sourceId=87709deb-913d-4cce-88d1-8573837dcc3b)
+[search] branch-aware: views=1, sourceType=all, pathPrefix=none
+[ChunkStorage] getContentHashes: views=1, result=14887
+[search] mode=broad, contentHashes=14887
+[OpenAITextEmbedder] Response validated: 1 embeddings
+[search] 3-way: wantSummary=false, hasSummary=false, run3Way=false
+[ChunkContentStorage] searchBm25: query="print & receipt & through & Aisino & fiscal & register", limit=50, prefilter=none
+[ChunkContentStorage] searchVector: limit=50, prefilter=none
+[ChunkStorage] resolveOccurrences: input=40, result=40
+[search] resolved active views: 1 (sourceId=87709deb-913d-4cce-88d1-8573837dcc3b)
+[search] branch-aware: views=1, sourceType=all, pathPrefix=none
+[ChunkStorage] getContentHashes: views=1, result=14887
+[search] mode=broad, contentHashes=14887
+[OpenAITextEmbedder] Response validated: 1 embeddings
+[search] 3-way: wantSummary=false, hasSummary=false, run3Way=false
+[ChunkContentStorage] searchBm25: query="build & Aisino & receipt & data & before & fiscal & print", limit=50, prefilter=none
+[ChunkContentStorage] searchVector: limit=50, prefilter=none
+[ChunkStorage] resolveOccurrences: input=40, result=40
+[search] resolved active views: 1 (sourceId=87709deb-913d-4cce-88d1-8573837dcc3b)
+[search] branch-aware: views=1, sourceType=all, pathPrefix=none
+[ChunkStorage] getContentHashes: views=1, result=14887
+[search] mode=broad, contentHashes=14887
+[OpenAITextEmbedder] Response validated: 1 embeddings
+[search] 3-way: wantSummary=false, hasSummary=false, run3Way=false
+[ChunkContentStorage] searchBm25: query="native & bluetooth & printer & sends & receipt & bytes & to & device", limit=50, prefilter=none
+[ChunkContentStorage] searchVector: limit=50, prefilter=none
+[ChunkStorage] resolveOccurrences: input=40, result=38
+[search] resolved active views: 1 (sourceId=87709deb-913d-4cce-88d1-8573837dcc3b)
+[search] branch-aware: views=1, sourceType=all, pathPrefix=none
+[ChunkStorage] getContentHashes: views=1, result=14887
+[search] mode=broad, contentHashes=14887
+[OpenAITextEmbedder] Response validated: 1 embeddings
+[search] 3-way: wantSummary=false, hasSummary=false, run3Way=false
+[ChunkContentStorage] searchBm25: query="send & document & print & request & to & print & service & endpoint", limit=50, prefilter=none
+[ChunkContentStorage] searchVector: limit=50, prefilter=none
+[ChunkStorage] resolveOccurrences: input=40, result=40
+[search] resolved active views: 1 (sourceId=87709deb-913d-4cce-88d1-8573837dcc3b)
+[search] branch-aware: views=1, sourceType=all, pathPrefix=none
+[ChunkStorage] getContentHashes: views=1, result=14887
+[search] mode=broad, contentHashes=14887
+[OpenAITextEmbedder] Response validated: 1 embeddings
+[search] 3-way: wantSummary=false, hasSummary=false, run3Way=false
+[ChunkContentStorage] searchBm25: query="main & stack & screen & registration & for & app & navigation", limit=50, prefilter=none
+[ChunkContentStorage] searchVector: limit=50, prefilter=none
+[ChunkStorage] resolveOccurrences: input=40, result=31
+[search] resolved active views: 1 (sourceId=87709deb-913d-4cce-88d1-8573837dcc3b)
+[search] branch-aware: views=1, sourceType=all, pathPrefix=none
+[ChunkStorage] getContentHashes: views=1, result=14887
+[search] mode=broad, contentHashes=14887
+[OpenAITextEmbedder] Response validated: 1 embeddings
+[search] 3-way: wantSummary=false, hasSummary=false, run3Way=false
+[ChunkContentStorage] searchBm25: query="desktop & menu & button & handlers & navigate & to & POS & sections", limit=50, prefilter=none
+[ChunkContentStorage] searchVector: limit=50, prefilter=none
+[ChunkStorage] resolveOccurrences: input=40, result=34
+[search] resolved active views: 1 (sourceId=87709deb-913d-4cce-88d1-8573837dcc3b)
+[search] branch-aware: views=1, sourceType=all, pathPrefix=none
+[ChunkStorage] getContentHashes: views=1, result=14887
+[search] mode=broad, contentHashes=14887
+[OpenAITextEmbedder] Response validated: 1 embeddings
+[search] 3-way: wantSummary=false, hasSummary=false, run3Way=false
+[ChunkContentStorage] searchBm25: query="barcode & scanner & hook & stops & scanning & when & payment & modal & is & open", limit=50, prefilter=none
+[ChunkContentStorage] searchVector: limit=50, prefilter=none
+[ChunkStorage] resolveOccurrences: input=40, result=38
+[search] resolved active views: 1 (sourceId=87709deb-913d-4cce-88d1-8573837dcc3b)
+[search] branch-aware: views=1, sourceType=all, pathPrefix=none
+[ChunkStorage] getContentHashes: views=1, result=14887
+[search] mode=broad, contentHashes=14887
+[OpenAITextEmbedder] Response validated: 1 embeddings
+[search] 3-way: wantSummary=false, hasSummary=false, run3Way=false
+[ChunkContentStorage] searchBm25: query="favorite & menu & renders & POS & desktop & shortcuts", limit=50, prefilter=none
+[ChunkContentStorage] searchVector: limit=50, prefilter=none
+[ChunkStorage] resolveOccurrences: input=40, result=36
+[search] resolved active views: 1 (sourceId=87709deb-913d-4cce-88d1-8573837dcc3b)
+[search] branch-aware: views=1, sourceType=all, pathPrefix=none
+[ChunkStorage] getContentHashes: views=1, result=14887
+[search] mode=broad, contentHashes=14887
+[OpenAITextEmbedder] Response validated: 1 embeddings
+[search] 3-way: wantSummary=true, hasSummary=true, run3Way=true
+[ChunkContentStorage] searchBm25: query="where & do & axios & requests & add & bearer & token & for & user & session", limit=50, prefilter=none
+[ChunkContentStorage] searchVector: limit=50, prefilter=none
+[ChunkContentStorage] searchSummaryVector: limit=50, prefilter=none
+[ChunkStorage] resolveOccurrences: input=67, result=63
+[search] resolved active views: 1 (sourceId=87709deb-913d-4cce-88d1-8573837dcc3b)
+[search] branch-aware: views=1, sourceType=all, pathPrefix=none
+[ChunkStorage] getContentHashes: views=1, result=14887
+[search] mode=broad, contentHashes=14887
+[OpenAITextEmbedder] Response validated: 1 embeddings
+[search] 3-way: wantSummary=true, hasSummary=true, run3Way=true
+[ChunkContentStorage] searchBm25: query="how & are & unauthorized & and & session & closed & api & errors & converted", limit=50, prefilter=none
+[ChunkContentStorage] searchVector: limit=50, prefilter=none
+[ChunkContentStorage] searchSummaryVector: limit=50, prefilter=none
+[ChunkStorage] resolveOccurrences: input=70, result=66
+[search] resolved active views: 1 (sourceId=87709deb-913d-4cce-88d1-8573837dcc3b)
+[search] branch-aware: views=1, sourceType=all, pathPrefix=none
+[ChunkStorage] getContentHashes: views=1, result=14887
+[search] mode=broad, contentHashes=14887
+[OpenAITextEmbedder] Response validated: 1 embeddings
+[search] 3-way: wantSummary=true, hasSummary=true, run3Way=true
+[ChunkContentStorage] searchBm25: query="login & flow & after & cashier & enters & credentials & and & grants & are & checked", limit=50, prefilter=none
+[ChunkContentStorage] searchVector: limit=50, prefilter=none
+[ChunkContentStorage] searchSummaryVector: limit=50, prefilter=none
+[ChunkStorage] resolveOccurrences: input=69, result=68
+[search] resolved active views: 1 (sourceId=87709deb-913d-4cce-88d1-8573837dcc3b)
+[search] branch-aware: views=1, sourceType=all, pathPrefix=none
+[ChunkStorage] getContentHashes: views=1, result=14887
+[search] mode=broad, contentHashes=14887
+[OpenAITextEmbedder] Response validated: 1 embeddings
+[search] 3-way: wantSummary=true, hasSummary=true, run3Way=true
+[ChunkContentStorage] searchBm25: query="change & expired & password & after & confirm & code & on & auth & screen", limit=50, prefilter=none
+[ChunkContentStorage] searchVector: limit=50, prefilter=none
+[ChunkContentStorage] searchSummaryVector: limit=50, prefilter=none
+[ChunkStorage] resolveOccurrences: input=66, result=66
+[search] resolved active views: 1 (sourceId=87709deb-913d-4cce-88d1-8573837dcc3b)
+[search] branch-aware: views=1, sourceType=all, pathPrefix=none
+[ChunkStorage] getContentHashes: views=1, result=14887
+[search] mode=broad, contentHashes=14887
+[OpenAITextEmbedder] Response validated: 1 embeddings
+[search] 3-way: wantSummary=true, hasSummary=true, run3Way=true
+[ChunkContentStorage] searchBm25: query="what & opens & payment & modal & from & basket & pay & button", limit=50, prefilter=none
+[ChunkContentStorage] searchVector: limit=50, prefilter=none
+[ChunkContentStorage] searchSummaryVector: limit=50, prefilter=none
+[ChunkStorage] resolveOccurrences: input=67, result=60
+[search] resolved active views: 1 (sourceId=87709deb-913d-4cce-88d1-8573837dcc3b)
+[search] branch-aware: views=1, sourceType=all, pathPrefix=none
+[ChunkStorage] getContentHashes: views=1, result=14887
+[search] mode=broad, contentHashes=14887
+[OpenAITextEmbedder] Response validated: 1 embeddings
+[search] 3-way: wantSummary=true, hasSummary=true, run3Way=true
+[ChunkContentStorage] searchBm25: query="choose & available & wallet & pay & provider & before & adding & payment", limit=50, prefilter=none
+[ChunkContentStorage] searchVector: limit=50, prefilter=none
+[ChunkContentStorage] searchSummaryVector: limit=50, prefilter=none
+[ChunkStorage] resolveOccurrences: input=71, result=69
+[search] resolved active views: 1 (sourceId=87709deb-913d-4cce-88d1-8573837dcc3b)
+[search] branch-aware: views=1, sourceType=all, pathPrefix=none
+[ChunkStorage] getContentHashes: views=1, result=14887
+[search] mode=broad, contentHashes=14887
+[OpenAITextEmbedder] Response validated: 1 embeddings
+[search] 3-way: wantSummary=true, hasSummary=true, run3Way=true
+[ChunkContentStorage] searchBm25: query="show & pay & modal & and & prepare & payment & view & payload", limit=50, prefilter=none
+[ChunkContentStorage] searchVector: limit=50, prefilter=none
+[ChunkContentStorage] searchSummaryVector: limit=50, prefilter=none
+[ChunkStorage] resolveOccurrences: input=68, result=54
+[search] resolved active views: 1 (sourceId=87709deb-913d-4cce-88d1-8573837dcc3b)
+[search] branch-aware: views=1, sourceType=all, pathPrefix=none
+[ChunkStorage] getContentHashes: views=1, result=14887
+[search] mode=broad, contentHashes=14887
+[OpenAITextEmbedder] Response validated: 1 embeddings
+[search] 3-way: wantSummary=true, hasSummary=true, run3Way=true
+[ChunkContentStorage] searchBm25: query="base & params & for & payment & process & document & and & cash & zone", limit=50, prefilter=none
+[ChunkContentStorage] searchVector: limit=50, prefilter=none
+[ChunkContentStorage] searchSummaryVector: limit=50, prefilter=none
+[ChunkStorage] resolveOccurrences: input=76, result=75
+[search] resolved active views: 1 (sourceId=87709deb-913d-4cce-88d1-8573837dcc3b)
+[search] branch-aware: views=1, sourceType=all, pathPrefix=none
+[ChunkStorage] getContentHashes: views=1, result=14887
+[search] mode=broad, contentHashes=14887
+[OpenAITextEmbedder] Response validated: 1 embeddings
+[search] 3-way: wantSummary=true, hasSummary=true, run3Way=true
+[ChunkContentStorage] searchBm25: query="subscribe & to & order & counters & from & socket & and & refresh & filters", limit=50, prefilter=none
+[ChunkContentStorage] searchVector: limit=50, prefilter=none
+[ChunkContentStorage] searchSummaryVector: limit=50, prefilter=none
+[ChunkStorage] resolveOccurrences: input=70, result=68
+[search] resolved active views: 1 (sourceId=87709deb-913d-4cce-88d1-8573837dcc3b)
+[search] branch-aware: views=1, sourceType=all, pathPrefix=none
+[ChunkStorage] getContentHashes: views=1, result=14887
+[search] mode=broad, contentHashes=14887
+[OpenAITextEmbedder] Response validated: 1 embeddings
+[search] 3-way: wantSummary=true, hasSummary=true, run3Way=true
+[ChunkContentStorage] searchBm25: query="socket & connection & uses & device & token & and & session & token", limit=50, prefilter=none
+[ChunkContentStorage] searchVector: limit=50, prefilter=none
+[ChunkContentStorage] searchSummaryVector: limit=50, prefilter=none
+[ChunkStorage] resolveOccurrences: input=70, result=64
+[search] resolved active views: 1 (sourceId=87709deb-913d-4cce-88d1-8573837dcc3b)
+[search] branch-aware: views=1, sourceType=all, pathPrefix=none
+[ChunkStorage] getContentHashes: views=1, result=14887
+[search] mode=broad, contentHashes=14887
+[OpenAITextEmbedder] Response validated: 1 embeddings
+[search] 3-way: wantSummary=true, hasSummary=true, run3Way=true
+[ChunkContentStorage] searchBm25: query="socket & helper & methods & for & orders & and & fast & orders & channels", limit=50, prefilter=none
+[ChunkContentStorage] searchVector: limit=50, prefilter=none
+[ChunkContentStorage] searchSummaryVector: limit=50, prefilter=none
+[ChunkStorage] resolveOccurrences: input=69, result=66
+[search] resolved active views: 1 (sourceId=87709deb-913d-4cce-88d1-8573837dcc3b)
+[search] branch-aware: views=1, sourceType=all, pathPrefix=none
+[ChunkStorage] getContentHashes: views=1, result=14887
+[search] mode=broad, contentHashes=14887
+[OpenAITextEmbedder] Response validated: 1 embeddings
+[search] 3-way: wantSummary=true, hasSummary=true, run3Way=true
+[ChunkContentStorage] searchBm25: query="basket & orders & screen & applies & status & filters & and & sections", limit=50, prefilter=none
+[ChunkContentStorage] searchVector: limit=50, prefilter=none
+[ChunkContentStorage] searchSummaryVector: limit=50, prefilter=none
+[ChunkStorage] resolveOccurrences: input=74, result=70
+[search] resolved active views: 1 (sourceId=87709deb-913d-4cce-88d1-8573837dcc3b)
+[search] branch-aware: views=1, sourceType=all, pathPrefix=none
+[ChunkStorage] getContentHashes: views=1, result=14887
+[search] mode=broad, contentHashes=14887
+[OpenAITextEmbedder] Response validated: 1 embeddings
+[search] 3-way: wantSummary=true, hasSummary=true, run3Way=true
+[ChunkContentStorage] searchBm25: query="print & receipt & through & Aisino & fiscal & register", limit=50, prefilter=none
+[ChunkContentStorage] searchVector: limit=50, prefilter=none
+[ChunkContentStorage] searchSummaryVector: limit=50, prefilter=none
+[ChunkStorage] resolveOccurrences: input=72, result=72
+[search] resolved active views: 1 (sourceId=87709deb-913d-4cce-88d1-8573837dcc3b)
+[search] branch-aware: views=1, sourceType=all, pathPrefix=none
+[ChunkStorage] getContentHashes: views=1, result=14887
+[search] mode=broad, contentHashes=14887
+[OpenAITextEmbedder] Response validated: 1 embeddings
+[search] 3-way: wantSummary=true, hasSummary=true, run3Way=true
+[ChunkContentStorage] searchBm25: query="build & Aisino & receipt & data & before & fiscal & print", limit=50, prefilter=none
+[ChunkContentStorage] searchVector: limit=50, prefilter=none
+[ChunkContentStorage] searchSummaryVector: limit=50, prefilter=none
+[ChunkStorage] resolveOccurrences: input=65, result=65
+[search] resolved active views: 1 (sourceId=87709deb-913d-4cce-88d1-8573837dcc3b)
+[search] branch-aware: views=1, sourceType=all, pathPrefix=none
+[ChunkStorage] getContentHashes: views=1, result=14887
+[search] mode=broad, contentHashes=14887
+[OpenAITextEmbedder] Response validated: 1 embeddings
+[search] 3-way: wantSummary=true, hasSummary=true, run3Way=true
+[ChunkContentStorage] searchBm25: query="native & bluetooth & printer & sends & receipt & bytes & to & device", limit=50, prefilter=none
+[ChunkContentStorage] searchVector: limit=50, prefilter=none
+[ChunkContentStorage] searchSummaryVector: limit=50, prefilter=none
+[ChunkStorage] resolveOccurrences: input=68, result=66
+[search] resolved active views: 1 (sourceId=87709deb-913d-4cce-88d1-8573837dcc3b)
+[search] branch-aware: views=1, sourceType=all, pathPrefix=none
+[ChunkStorage] getContentHashes: views=1, result=14887
+[search] mode=broad, contentHashes=14887
+[OpenAITextEmbedder] Response validated: 1 embeddings
+[search] 3-way: wantSummary=true, hasSummary=true, run3Way=true
+[ChunkContentStorage] searchBm25: query="send & document & print & request & to & print & service & endpoint", limit=50, prefilter=none
+[ChunkContentStorage] searchVector: limit=50, prefilter=none
+[ChunkContentStorage] searchSummaryVector: limit=50, prefilter=none
+[ChunkStorage] resolveOccurrences: input=71, result=71
+[search] resolved active views: 1 (sourceId=87709deb-913d-4cce-88d1-8573837dcc3b)
+[search] branch-aware: views=1, sourceType=all, pathPrefix=none
+[ChunkStorage] getContentHashes: views=1, result=14887
+[search] mode=broad, contentHashes=14887
+[OpenAITextEmbedder] Response validated: 1 embeddings
+[search] 3-way: wantSummary=true, hasSummary=true, run3Way=true
+[ChunkContentStorage] searchBm25: query="main & stack & screen & registration & for & app & navigation", limit=50, prefilter=none
+[ChunkContentStorage] searchVector: limit=50, prefilter=none
+[ChunkContentStorage] searchSummaryVector: limit=50, prefilter=none
+[ChunkStorage] resolveOccurrences: input=71, result=57
+[search] resolved active views: 1 (sourceId=87709deb-913d-4cce-88d1-8573837dcc3b)
+[search] branch-aware: views=1, sourceType=all, pathPrefix=none
+[ChunkStorage] getContentHashes: views=1, result=14887
+[search] mode=broad, contentHashes=14887
+[OpenAITextEmbedder] Response validated: 1 embeddings
+[search] 3-way: wantSummary=true, hasSummary=true, run3Way=true
+[ChunkContentStorage] searchBm25: query="desktop & menu & button & handlers & navigate & to & POS & sections", limit=50, prefilter=none
+[ChunkContentStorage] searchVector: limit=50, prefilter=none
+[ChunkContentStorage] searchSummaryVector: limit=50, prefilter=none
+[ChunkStorage] resolveOccurrences: input=72, result=62
+[search] resolved active views: 1 (sourceId=87709deb-913d-4cce-88d1-8573837dcc3b)
+[search] branch-aware: views=1, sourceType=all, pathPrefix=none
+[ChunkStorage] getContentHashes: views=1, result=14887
+[search] mode=broad, contentHashes=14887
+[OpenAITextEmbedder] Response validated: 1 embeddings
+[search] 3-way: wantSummary=true, hasSummary=true, run3Way=true
+[ChunkContentStorage] searchBm25: query="barcode & scanner & hook & stops & scanning & when & payment & modal & is & open", limit=50, prefilter=none
+[ChunkContentStorage] searchVector: limit=50, prefilter=none
+[ChunkContentStorage] searchSummaryVector: limit=50, prefilter=none
+[ChunkStorage] resolveOccurrences: input=73, result=68
+[search] resolved active views: 1 (sourceId=87709deb-913d-4cce-88d1-8573837dcc3b)
+[search] branch-aware: views=1, sourceType=all, pathPrefix=none
+[ChunkStorage] getContentHashes: views=1, result=14887
+[search] mode=broad, contentHashes=14887
+[OpenAITextEmbedder] Response validated: 1 embeddings
+[search] 3-way: wantSummary=true, hasSummary=true, run3Way=true
+[ChunkContentStorage] searchBm25: query="favorite & menu & renders & POS & desktop & shortcuts", limit=50, prefilter=none
+[ChunkContentStorage] searchVector: limit=50, prefilter=none
+[ChunkContentStorage] searchSummaryVector: limit=50, prefilter=none
+[ChunkStorage] resolveOccurrences: input=67, result=61

@@ -30,21 +30,14 @@ import {
 import { createTextEmbedder } from '../src/embeddings/index.js';
 import { createReranker } from '../src/search/reranker/index.js';
 import { SearchCoordinator } from '../src/search/coordinator.js';
+import {
+  matchByPathAndLineRange,
+  validateBaselineFile,
+  type BaselineFile,
+  type BaselineQuery,
+} from './bench-summary-helpers.js';
 
 type Mode = 'baseline' | 'treatment' | 'both';
-
-interface BaselineQuery {
-  query: string;
-  goldenFqns: string[];
-  category: string;
-  difficulty?: string;
-}
-
-interface BaselineFile {
-  version: number;
-  source: string;
-  queries: BaselineQuery[];
-}
 
 interface QueryResult {
   query: string;
@@ -100,17 +93,8 @@ function parseArgs(argv: string[]): {
 
 function loadBaseline(path: string): BaselineFile {
   const raw = readFileSync(path, 'utf-8');
-  const parsed = JSON.parse(raw) as BaselineFile;
-  if (!parsed.queries || !Array.isArray(parsed.queries)) {
-    throw new Error(`Invalid baseline file: ${path}. Missing "queries" array.`);
-  }
-  return parsed;
-}
-
-// --- Извлечение FQN из search result. ---
-
-function extractFqn(result: { coordinates: { fqn?: string } }): string | undefined {
-  return result.coordinates.fqn;
+  const parsed = JSON.parse(raw) as unknown;
+  return validateBaselineFile(parsed);
 }
 
 // --- Оценка одной query. ---
@@ -122,18 +106,16 @@ async function evaluateQuery(
   topK: number,
 ): Promise<QueryResult> {
   const response = await coordinator.search({ query: q.query, sourceName, topK });
-  const resultFqns = response.results
-    .map(extractFqn)
-    .filter((f): f is string => f !== undefined);
 
-  const goldenSet = new Set(q.goldenFqns);
   let rank: number | null = null;
-  for (let i = 0; i < resultFqns.length; i++) {
-    if (goldenSet.has(resultFqns[i]!)) {
+  for (let i = 0; i < response.results.length; i++) {
+    const result = response.results[i]!;
+    if (q.expected.some((expected) => matchByPathAndLineRange(expected, result))) {
       rank = i + 1;
       break;
     }
   }
+  // TODO: optional fqn-bonus counter (follow-up PR, read candidate.coordinates.fqn).
 
   return {
     query: q.query,

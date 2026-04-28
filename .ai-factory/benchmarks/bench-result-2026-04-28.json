@@ -1,0 +1,83 @@
+{
+  "source": "karipos",
+  "metrics": [
+    {
+      "mode": "baseline",
+      "totalQueries": 20,
+      "recallAt5": 0.65,
+      "recallAt10": 0.8,
+      "mrr": 0.5395833333333333,
+      "perCategory": {
+        "auth": {
+          "total": 4,
+          "recallAt5": 0.75,
+          "recallAt10": 0.75,
+          "mrr": 0.75
+        },
+        "payment": {
+          "total": 4,
+          "recallAt5": 0.75,
+          "recallAt10": 0.75,
+          "mrr": 0.4583333333333333
+        },
+        "order_sync": {
+          "total": 4,
+          "recallAt5": 0.75,
+          "recallAt10": 0.75,
+          "mrr": 0.5
+        },
+        "receipt_printing": {
+          "total": 4,
+          "recallAt5": 0.5,
+          "recallAt10": 0.75,
+          "mrr": 0.53125
+        },
+        "navigation_ui": {
+          "total": 4,
+          "recallAt5": 0.5,
+          "recallAt10": 1,
+          "mrr": 0.45833333333333337
+        }
+      }
+    },
+    {
+      "mode": "treatment",
+      "totalQueries": 20,
+      "recallAt5": 0.65,
+      "recallAt10": 0.8,
+      "mrr": 0.5388888888888889,
+      "perCategory": {
+        "auth": {
+          "total": 4,
+          "recallAt5": 0.75,
+          "recallAt10": 0.75,
+          "mrr": 0.75
+        },
+        "payment": {
+          "total": 4,
+          "recallAt5": 0.75,
+          "recallAt10": 0.75,
+          "mrr": 0.4583333333333333
+        },
+        "order_sync": {
+          "total": 4,
+          "recallAt5": 0.75,
+          "recallAt10": 0.75,
+          "mrr": 0.5
+        },
+        "receipt_printing": {
+          "total": 4,
+          "recallAt5": 0.5,
+          "recallAt10": 0.75,
+          "mrr": 0.5277777777777778
+        },
+        "navigation_ui": {
+          "total": 4,
+          "recallAt5": 0.5,
+          "recallAt10": 1,
+          "mrr": 0.45833333333333337
+        }
+      }
+    }
+  ]
+}

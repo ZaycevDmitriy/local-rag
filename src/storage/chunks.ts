@@ -74,7 +74,7 @@ export class ChunkStorage {
           o.headerPath ?? null,
           o.language ?? null,
           o.ordinal,
-          JSON.stringify(o.metadata ?? {}),
+          (o.metadata ?? {}) as postgres.JSONValue,
         ]);
 
         await tx.unsafe(
